@@ -1,7 +1,30 @@
 """Offline safety tests: python3 -m unittest -v test_core.py"""
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace as N
-from core import apply, approved_visible, light_info, temp_range
+from unittest.mock import patch
+from core import apply, approved_visible, light_info, read_config, temp_range, write_config
+
+
+class SettingsTests(unittest.TestCase):
+    def test_legacy_icon_preference_is_discarded_when_saving_settings(self):
+        saved = {
+            "ip": "192.168.1.20",
+            "token": "test-token",
+            "approved": {"bulb": "room"},
+            "approved_sensors": {"sensor": "room"},
+            "tray_room": "room",
+        }
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(dict(saved, tray_icon="Network")), encoding="utf-8")
+            with patch("core.config_path", return_value=path):
+                config = read_config()
+                self.assertEqual(config, saved)
+                write_config(config)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
 
 
 class FakeLight:

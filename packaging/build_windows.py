@@ -15,6 +15,7 @@ from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
+APP_ICON = ROOT / "assets" / "dirigera.ico"
 DIST = ROOT / "dist"
 RELEASE = ROOT / "release"
 APP = DIST / "Dirigera"
@@ -71,28 +72,15 @@ def copy_licenses():
     )
 
 
-def make_icon():
-    from PySide6.QtGui import QGuiApplication, QIcon
-
-    app = QGuiApplication([])
-    app.setApplicationName("DIRIGERA icon builder")
-    icon = QIcon(str(ROOT / "assets" / "dirigera.svg"))
-    destination = BUILD / "dirigera.ico"
-    if not icon.pixmap(128, 128).save(str(destination), "ICO"):
-        raise RuntimeError("Failed to create the Windows application icon")
-    return destination
-
-
-def freeze_app(name, mode, icon, output):
+def freeze_app(name, mode, output):
     subprocess.run(
         [
             sys.executable, "-m", "PyInstaller",
             "--noconfirm", "--clean", "--windowed", mode, "--noupx",
-            "--name", name, "--icon", str(icon),
+            "--name", name, "--icon", str(APP_ICON),
             "--distpath", str(output), "--workpath", str(BUILD / "pyinstaller"),
             "--specpath", str(BUILD),
-            "--add-data", f"{ROOT / 'assets'}:assets",
-            "--hidden-import", "PySide6.QtSvg",
+            "--add-data", f"{APP_ICON}:assets",
             "--copy-metadata", "PySide6-Essentials", "--copy-metadata", "dirigera",
             str(ROOT / "app.py"),
         ],
@@ -101,8 +89,8 @@ def freeze_app(name, mode, icon, output):
     )
 
 
-def build_app(icon):
-    freeze_app("Dirigera", "--onedir", icon, DIST)
+def build_app():
+    freeze_app("Dirigera", "--onedir", DIST)
     copy_licenses()
     for filename in BUNDLE_DOCUMENTS:
         shutil.copy2(ROOT / filename, APP / filename)
@@ -136,14 +124,13 @@ def main():
     portable_executable = PORTABLE_EXE / f"{portable_name}.exe"
     if not args.package_only:
         BUILD.mkdir(exist_ok=True)
-        icon = make_icon()
-        build_app(icon)
+        build_app()
         if args.portable_exe:
-            freeze_app(portable_name, "--onefile", icon, PORTABLE_EXE)
+            freeze_app(portable_name, "--onefile", PORTABLE_EXE)
             shutil.copytree(APP / "licenses", PORTABLE_EXE / "licenses", dirs_exist_ok=True)
             for filename in BUNDLE_DOCUMENTS:
                 shutil.copy2(APP / filename, PORTABLE_EXE / filename)
-    elif not (APP / "Dirigera.exe").is_file() or not (BUILD / "dirigera.ico").is_file():
+    elif not (APP / "Dirigera.exe").is_file():
         parser.error("Run a full build before using --package-only")
     elif args.portable_exe and not portable_executable.is_file():
         parser.error("Run a full build with --portable-exe first")

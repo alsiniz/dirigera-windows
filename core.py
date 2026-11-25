@@ -185,7 +185,7 @@ def read_config() -> dict:
     path = config_path()
     if not path.exists():
         return {"ip": "", "token": "", "approved": {}, "approved_sensors": {},
-                "tray_icon": "DIRIGERA", "tray_room": ""}
+                "tray_room": ""}
     data = json.loads(path.read_text(encoding="utf-8"))
     raw = data.get("approved", {})
     sensor_raw = data.get("approved_sensors", {})
@@ -194,7 +194,6 @@ def read_config() -> dict:
         "token": str(data.get("token", "")),
         "approved": {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {},
         "approved_sensors": {str(k): str(v) for k, v in sensor_raw.items()} if isinstance(sensor_raw, dict) else {},
-        "tray_icon": str(data.get("tray_icon", "DIRIGERA")),
         "tray_room": str(data.get("tray_room", "")),
     }
 

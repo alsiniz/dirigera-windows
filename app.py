@@ -11,17 +11,16 @@ from collections import defaultdict
 from threading import Lock
 from importlib.metadata import PackageNotFoundError, version as package_version
 from version import APP_NAME, VERSION, KOFI_URL
-from windows_icons import system_icons
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QSize, QUrl, QProcess, QProcessEnvironment
-from PySide6.QtGui import QColor, QPainter, QPen, QImage, QCursor, QKeySequence, QShortcut, QDesktopServices
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment
+from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QLineEdit, QDialog, QDialogButtonBox, QTreeWidget,
     QTreeWidgetItem, QMessageBox, QTabWidget, QScrollArea, QGroupBox, QSlider,
-    QSystemTrayIcon, QMenu, QFrame, QSizePolicy, QComboBox, QListWidget, QListWidgetItem, QToolTip, QStyleOptionSlider, QStyle,
+    QSystemTrayIcon, QMenu, QFrame, QSizePolicy, QComboBox, QToolTip, QStyleOptionSlider, QStyle,
 )
 from core import (apply, approved_climate, approved_visible, environment_snapshot, read_config, snapshot,
                   toggle_power, wheel_steps, stepped_brightness, tray_power_targets,
@@ -496,56 +495,6 @@ class ApprovalDialog(QDialog):
             self.accept()
 
 
-class IconPickerDialog(QDialog):
-    """Searchable gallery of app and Windows style icons."""
-
-    def __init__(self, parent, initial):
-        super().__init__(parent)
-        self.setWindowTitle("Choose app icon")
-        self.resize(700, 530)
-        outer = QVBoxLayout(self)
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Filter icon names")
-        outer.addWidget(self.search)
-        self.items = QListWidget()
-        self.items.setViewMode(QListWidget.ViewMode.IconMode)
-        self.items.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.items.setIconSize(QSize(36, 36))
-        self.items.setGridSize(QSize(154, 79))
-        self.items.setWordWrap(True)
-        self.items.setUniformItemSizes(True)
-        outer.addWidget(self.items)
-        self.chosen = initial
-        for name, icon in sorted(system_icons().items()):
-            if icon.isNull():
-                continue
-            item = QListWidgetItem(icon, name)
-            item.setData(Qt.ItemDataRole.UserRole, name)
-            self.items.addItem(item)
-            if name == initial:
-                self.items.setCurrentItem(item)
-        self.search.textChanged.connect(self.filter_items)
-        self.items.itemDoubleClicked.connect(self.accept_choice)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept_choice)
-        buttons.rejected.connect(self.reject)
-        outer.addWidget(buttons)
-
-    def filter_items(self, term):
-        term = term.strip().casefold()
-        for i in range(self.items.count()):
-            item = self.items.item(i)
-            item.setHidden(term not in item.text().casefold())
-
-    def accept_choice(self, _item=None):
-        item = self.items.currentItem()
-        if item and not item.isHidden():
-            self.chosen = item.data(Qt.ItemDataRole.UserRole)
-            self.accept()
-        else:
-            QMessageBox.information(self, "Choose icon", "Select an icon from the list first.")
-
-
 class ClickToJumpSlider(QSlider):
     """Click-to-jump track and notify the window about mouse-wheel edits.
 
@@ -590,7 +539,7 @@ class ClickToJumpSlider(QSlider):
 
 
 class TraySettingsDialog(QDialog):
-    def __init__(self, parent, icon_name, room_id, rooms):
+    def __init__(self, parent, room_id, rooms):
         super().__init__(parent)
         self.setWindowTitle("System tray settings")
         self.setMinimumSize(600, 340)
@@ -607,15 +556,6 @@ class TraySettingsDialog(QDialog):
         idx = self.room.findData(room_id)
         self.room.setCurrentIndex(max(0, idx))
         form.addRow("Tray control room", self.room)
-        icon_row = QHBoxLayout()
-        self.icon_name = icon_name
-        self.icon_label = QLabel(icon_name)
-        self.icon_label.setMinimumWidth(200)
-        icon_row.addWidget(self.icon_label, stretch=1)
-        browse = QPushButton("Browse system icons…")
-        browse.clicked.connect(self.pick_icon)
-        icon_row.addWidget(browse)
-        form.addRow("App icon", icon_row)
         layout.addLayout(form)
         shortcuts = QGroupBox("System tray shortcuts")
         shortcut_layout = QVBoxLayout(shortcuts)
@@ -649,12 +589,6 @@ class TraySettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-
-    def pick_icon(self):
-        picker = IconPickerDialog(self, self.icon_name)
-        if picker.exec() == QDialog.DialogCode.Accepted:
-            self.icon_name = picker.chosen
-            self.icon_label.setText(self.icon_name)
 
 
 class MainWindow(QMainWindow):
@@ -738,7 +672,7 @@ class MainWindow(QMainWindow):
 
     def _create_tray(self):
         self._tray_menu = QMenu(self)
-        self.tray = QSystemTrayIcon(self._selected_qicon(), self)
+        self.tray = QSystemTrayIcon(self.windowIcon(), self)
         self.tray.setContextMenu(self._tray_menu)
         self.tray.activated.connect(self.on_tray_activation)
         self.tray_wheel = TrayWheelHook(self.tray, self._tray_menu)
@@ -756,11 +690,6 @@ class MainWindow(QMainWindow):
         elif reason == QSystemTrayIcon.ActivationReason.MiddleClick:
             self._tray_last_middle = True
             self.on_tray_middle()
-
-    def _selected_qicon(self):
-        icons = system_icons()
-        icon = icons.get(self.config["tray_icon"], icons["DIRIGERA"])
-        return icons["DIRIGERA"] if icon.isNull() else icon
 
     def _current_tray_room(self):
         return tray_room(self.lights, self.config["approved"], self.config.get("tray_room", ""))
@@ -810,7 +739,7 @@ class MainWindow(QMainWindow):
             action.setCheckable(True)
             action.setChecked(self.config.get("tray_room") == rid)
             action.triggered.connect(lambda checked=False, id_=rid: self.set_tray_room(id_))
-        menu.addAction("Tray settings / change icon…", self.change_tray_settings)
+        menu.addAction("Tray settings", self.change_tray_settings)
         menu.addAction(f"About {APP_NAME}…", self.show_about)
         menu.addSeparator()
         menu.addAction(f"Quit {APP_NAME}", self.quit_application)
@@ -827,15 +756,9 @@ class MainWindow(QMainWindow):
 
     def change_tray_settings(self):
         rooms = self._approved_rooms()
-        dialog = TraySettingsDialog(self, self.config.get("tray_icon", "DIRIGERA"),
-                                    self.config.get("tray_room", ""), rooms)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self.config["tray_icon"] = dialog.icon_name
-        self.set_tray_room(dialog.room.currentData())
-        icon = self._selected_qicon()
-        self.setWindowIcon(icon)
-        self.tray.setIcon(icon)
+        dialog = TraySettingsDialog(self, self.config.get("tray_room", ""), rooms)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.set_tray_room(dialog.room.currentData())
 
     def show_about(self):
         def installed_version(name):
@@ -847,7 +770,6 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QTextBrowser
         dialog = QDialog(self)
         dialog.setWindowTitle(f'About {APP_NAME}')
-        dialog.setWindowIcon(self._selected_qicon())
         dialog.resize(560, 490)
         layout = QVBoxLayout(dialog)
         heading = QLabel(f'{APP_NAME}  ·  {VERSION}')
@@ -1024,7 +946,6 @@ class MainWindow(QMainWindow):
         self.config = {"ip": new_ip, "token": dialog.token.text().strip(),
                        "approved": dict(self.config["approved"]) if same_hub else {},
                        "approved_sensors": dict(self.config["approved_sensors"]) if same_hub else {},
-                       "tray_icon": self.config.get("tray_icon", "DIRIGERA"),
                        "tray_room": self.config.get("tray_room", "") if same_hub else ""}
         write_config(self.config)
         self.lights = []
@@ -1323,12 +1244,13 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "dirigera.ico")))
     if sys.argv[1:] == ["--check-runtime"]:
-        # Exercise the frozen Qt platform and SVG plugins without opening a
+        # Exercise the frozen Qt platform and icon loading without opening a
         # window, installing the tray hook, or connecting to a hub.
         from dirigera.hub import auth
 
-        if system_icons()["DIRIGERA"].pixmap(16, 16).isNull() or not callable(auth.main):
+        if app.windowIcon().pixmap(16, 16).isNull() or not callable(auth.main):
             sys.exit(1)
         return
 
@@ -1336,7 +1258,6 @@ def main():
     app.setApplicationDisplayName(APP_NAME)
     app.setQuitOnLastWindowClosed(False)
     window = MainWindow()
-    window.setWindowIcon(window._selected_qicon())
     window.show()
     sys.exit(app.exec())
 

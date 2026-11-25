@@ -45,8 +45,8 @@ approved temperature and humidity sensors.
 
 ## System tray controls
 
-If Windows puts the icon behind the tray chevron, drag it out to the area by
-the clock. Choose the controlled room and icon in **Tray settings**.
+If Windows puts the lightbulb icon behind the tray chevron, drag it out to
+the area by the clock. Choose the controlled room in **Tray settings**.
 
 | Gesture | Action |
 |---|---|

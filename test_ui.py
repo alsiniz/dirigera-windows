@@ -68,7 +68,7 @@ class TraySettingsTests(unittest.TestCase):
                 self.requested_from = dialog_parent
 
         parent = FakeMain()
-        dialog = TraySettingsDialog(parent, 'DIRIGERA', 'r1', {'r1': 'Room'})
+        dialog = TraySettingsDialog(parent, 'r1', {'r1': 'Room'})
         matches = [b for b in dialog.findChildren(QPushButton)
                    if b.text() == 'Input diagnostics…']
         self.assertEqual(len(matches), 1)
