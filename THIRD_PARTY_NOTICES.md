@@ -15,9 +15,10 @@ by alsiniz and contributors. The upstream MIT license is included in [LICENSE](L
 The Windows bundles include the library versions and wheel-provided license
 files under `licenses/`, along with Qt’s LGPLv3 and GPLv3 license texts.
 Qt publishes its [third-party notices](https://doc.qt.io/qt-6/licenses-used-in-qt.html).
-Qt libraries are loaded dynamically from the
-`_internal/` directory. The project source and build instructions are provided
-with this repository.
+Qt libraries are loaded dynamically from the `_internal/` directory in the
+installer and portable ZIP. The standalone executable extracts them at launch.
+To rebuild with a different compatible Qt version, install it in the build
+environment and use the [build instructions](README.md#build-and-test).
 
 IKEA and DIRIGERA are marks of their respective owners. This project is
 independent of IKEA.

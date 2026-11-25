@@ -10,14 +10,20 @@ by alsiniz and contributors, based on upstream commit
 
 ## Windows downloads
 
-The build targets **Windows 11 x64** and produces two files.
+The build targets **Windows 11 x64**.
 
 | Download | How to use it |
 |---|---|
 | `DIRIGERA-Windows-<version>-x64-Setup.exe` | Recommended. Installs for your Windows account, adds a Start menu shortcut, and provides an uninstaller. It does not request administrator privileges. |
+| `DIRIGERA-Windows-<version>-x64-Portable.exe` | Run the standalone executable without installing. It unpacks its bundled libraries to a temporary folder at launch. |
 | `DIRIGERA-Windows-<version>-x64-Portable.zip` | Extract the entire folder and run `Dirigera.exe`. Keep the `_internal` folder alongside it. |
 
-Both packages include Python and Qt and use the same settings under
+For the unsigned test builds, open **Actions → Windows builds**, select the
+successful run, and download **dirigera-windows-x64-portable-exe** or
+**dirigera-windows-x64-installer** under **Artifacts**. GitHub wraps each
+artifact in a ZIP. Extract the download, then run the executable inside.
+
+All packages include Python and Qt and use the same settings under
 `%LOCALAPPDATA%\DIRIGERA\config.json`. Delete that folder to clear your saved
 hub authorization and app preferences. Treat the configuration file as private.
 The access token can control the whole hub, while the app limits its own
@@ -69,10 +75,10 @@ Install Inno Setup 6 and run:
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
 .\.venv\Scripts\python.exe -m unittest discover -v
-.\.venv\Scripts\python.exe packaging/build_windows.py
+.\.venv\Scripts\python.exe packaging/build_windows.py --portable-exe
 ```
 
-The build writes both packages to `release\`. Pass `--iscc` with the compiler
+The build writes the packages to `release\`. Pass `--iscc` with the compiler
 path if it is installed in a custom location. The Windows GitHub Actions
 workflow builds unsigned test artifacts. Sign the app and setup executable
 before a public release using the publisher's Authenticode identity. Sign
@@ -80,8 +86,8 @@ before a public release using the publisher's Authenticode identity. Sign
 `packaging/build_windows.py --package-only`, then sign the setup executable.
 
 For release testing, use an interactive Windows 11 desktop with a DIRIGERA hub.
-Install from a standard account and repeat from the extracted ZIP on a machine
-without Python. Pair from a fresh configuration. Check tray scrolling in both
+Install from a standard account and repeat with the portable executable on a
+machine without Python. Pair from a fresh configuration. Check tray scrolling in both
 directions, middle-click, left-click, right-click, the climate tooltip, and the
 brightness overlay. Verify that scrolling over other icons passes through and
 that scrolling over DIRIGERA leaves off and unapproved bulbs alone. Test an

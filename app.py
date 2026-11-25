@@ -1312,6 +1312,15 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    if sys.argv[1:] == ["--check-runtime"]:
+        # Exercise the frozen Qt platform and SVG plugins without opening a
+        # window, installing the tray hook, or connecting to a hub.
+        from dirigera.hub import auth
+
+        if system_icons()["DIRIGERA"].pixmap(16, 16).isNull() or not callable(auth.main):
+            sys.exit(1)
+        return
+
     app.setApplicationName("dirigera-windows")
     app.setApplicationDisplayName(APP_NAME)
     app.setQuitOnLastWindowClosed(False)

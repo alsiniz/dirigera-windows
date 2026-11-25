@@ -11,6 +11,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-2025
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,11 +22,16 @@ jobs:
       - run: python -m unittest discover -v
         env:
           QT_QPA_PLATFORM: offscreen
-      - run: python packaging/build_windows.py
+      - run: python packaging/build_windows.py --portable-exe
         env:
           QT_QPA_PLATFORM: offscreen
       - uses: actions/upload-artifact@v4
         with:
-          name: dirigera-windows-x64
-          path: release/
+          name: dirigera-windows-x64-installer
+          path: release/*-Setup.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dirigera-windows-x64-portable-exe
+          path: release/portable-exe/
           if-no-files-found: error

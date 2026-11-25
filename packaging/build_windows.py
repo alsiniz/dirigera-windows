@@ -1,4 +1,4 @@
-"""Build a Windows x64 installer and a no-install ZIP from one Qt bundle."""
+"""Build a Windows x64 installer and portable builds."""
 
 import argparse
 from collections import deque
@@ -18,6 +18,8 @@ BUILD = ROOT / "build"
 DIST = ROOT / "dist"
 RELEASE = ROOT / "release"
 APP = DIST / "Dirigera"
+PORTABLE_EXE = RELEASE / "portable-exe"
+BUNDLE_DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md")
 
 
 def find_iscc():
@@ -81,15 +83,13 @@ def make_icon():
     return destination
 
 
-def build_app():
-    BUILD.mkdir(exist_ok=True)
-    icon = make_icon()
+def freeze_app(name, mode, icon, output):
     subprocess.run(
         [
             sys.executable, "-m", "PyInstaller",
-            "--noconfirm", "--clean", "--windowed", "--onedir", "--noupx",
-            "--name", "Dirigera", "--icon", str(icon),
-            "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller"),
+            "--noconfirm", "--clean", "--windowed", mode, "--noupx",
+            "--name", name, "--icon", str(icon),
+            "--distpath", str(output), "--workpath", str(BUILD / "pyinstaller"),
             "--specpath", str(BUILD),
             "--add-data", f"{ROOT / 'assets'}:assets",
             "--hidden-import", "PySide6.QtSvg",
@@ -99,15 +99,29 @@ def build_app():
         check=True,
         cwd=ROOT,
     )
+
+
+def build_app(icon):
+    freeze_app("Dirigera", "--onedir", icon, DIST)
     copy_licenses()
-    for filename in ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"):
+    for filename in BUNDLE_DOCUMENTS:
         shutil.copy2(ROOT / filename, APP / filename)
+
+
+def check_runtime(executable):
+    subprocess.run(
+        [str(executable), "--check-runtime"],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+        check=True,
+        timeout=60,
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iscc", type=Path, help="Path to the Inno Setup 6 compiler")
     parser.add_argument("--package-only", action="store_true", help="Use the existing app bundle")
+    parser.add_argument("--portable-exe", action="store_true", help="Also build a standalone portable executable")
     args = parser.parse_args()
     if sys.platform != "win32" or platform.machine().upper() not in {"AMD64", "X86_64"} or sys.maxsize <= 2**32:
         parser.error("Build on Windows with x64 Python")
@@ -118,11 +132,25 @@ def main():
     sys.path.insert(0, str(ROOT))
     from version import VERSION
 
+    portable_name = f"DIRIGERA-Windows-{VERSION}-x64-Portable"
+    portable_executable = PORTABLE_EXE / f"{portable_name}.exe"
     if not args.package_only:
-        build_app()
+        BUILD.mkdir(exist_ok=True)
+        icon = make_icon()
+        build_app(icon)
+        if args.portable_exe:
+            freeze_app(portable_name, "--onefile", icon, PORTABLE_EXE)
+            shutil.copytree(APP / "licenses", PORTABLE_EXE / "licenses", dirs_exist_ok=True)
+            for filename in BUNDLE_DOCUMENTS:
+                shutil.copy2(APP / filename, PORTABLE_EXE / filename)
     elif not (APP / "Dirigera.exe").is_file() or not (BUILD / "dirigera.ico").is_file():
         parser.error("Run a full build before using --package-only")
+    elif args.portable_exe and not portable_executable.is_file():
+        parser.error("Run a full build with --portable-exe first")
 
+    check_runtime(APP / "Dirigera.exe")
+    if args.portable_exe:
+        check_runtime(portable_executable)
     RELEASE.mkdir(exist_ok=True)
     subprocess.run(
         [str(iscc.resolve()), f"/DAppVersion={VERSION}", str(ROOT / "packaging" / "dirigera.iss")],
@@ -130,13 +158,15 @@ def main():
         cwd=ROOT,
     )
     shutil.make_archive(
-        str(RELEASE / f"DIRIGERA-Windows-{VERSION}-x64-Portable"),
+        str(RELEASE / portable_name),
         "zip",
         root_dir=DIST,
         base_dir=APP.name,
     )
     for artifact in sorted(RELEASE.glob(f"DIRIGERA-Windows-{VERSION}-x64-*")):
         print(artifact)
+    if args.portable_exe:
+        print(portable_executable)
 
 
 if __name__ == "__main__":
