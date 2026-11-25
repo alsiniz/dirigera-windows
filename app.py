@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from hashlib import sha256
 from html import escape
 import queue
 import sys
@@ -14,15 +15,16 @@ from version import APP_NAME, VERSION, KOFI_URL
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile
 from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QCursor, QKeySequence, QShortcut, QDesktopServices
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QLineEdit, QDialog, QDialogButtonBox, QTreeWidget,
     QTreeWidgetItem, QMessageBox, QTabWidget, QScrollArea, QGroupBox, QSlider,
     QSystemTrayIcon, QMenu, QFrame, QSizePolicy, QComboBox, QToolTip, QStyleOptionSlider, QStyle,
 )
-from core import (apply, approved_climate, approved_visible, environment_snapshot, read_config, snapshot,
+from core import (apply, approved_climate, approved_visible, config_path, environment_snapshot, read_config, snapshot,
                   toggle_power, wheel_steps, stepped_brightness, tray_power_targets,
                   tray_room, tray_targets, write_config)
 
@@ -815,6 +817,13 @@ class MainWindow(QMainWindow):
             support.setToolTip("Opens the original project's Ko-fi page in your default browser")
             support.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(KOFI_URL)))
             layout.addWidget(support, alignment=Qt.AlignmentFlag.AlignHCenter)
+        licenses = Path(__file__).resolve().parent / "licenses"
+        if getattr(sys, "frozen", False) and not licenses.is_dir():
+            licenses = Path(sys.executable).parent / "licenses"
+        if licenses.is_dir():
+            notices = QPushButton("Licenses and notices")
+            notices.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(licenses))))
+            layout.addWidget(notices, alignment=Qt.AlignmentFlag.AlignHCenter)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.accept)
         layout.addWidget(buttons)
@@ -1257,8 +1266,50 @@ def main():
     app.setApplicationName("dirigera-windows")
     app.setApplicationDisplayName(APP_NAME)
     app.setQuitOnLastWindowClosed(False)
+    start_requested = "--tray" in sys.argv
+    settings_dir = config_path().parent
+    try:
+        settings_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        QMessageBox.critical(None, APP_NAME, f"Could not open the settings directory: {error}")
+        return
+
+    # A Start menu launch should open the window of the existing tray process.
+    server_name = "DIRIGERA-" + sha256(str(settings_dir).casefold().encode("utf-8")).hexdigest()[:24]
+    instance = QLockFile(str(settings_dir / "instance.lock"))
+    instance.setStaleLockTime(0)
+    if not instance.tryLock(0):
+        if instance.error() != QLockFile.LockError.LockFailedError:
+            QMessageBox.critical(None, APP_NAME, "Could not lock the settings directory.")
+        elif not start_requested:
+            client = QLocalSocket()
+            client.connectToServer(server_name)
+            if not client.waitForConnected(1500):
+                QMessageBox.information(None, APP_NAME, "DIRIGERA is already running. Open it from the system tray.")
+        return
+
+    QLocalServer.removeServer(server_name)
+    server = QLocalServer(app)
+    server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
+    listening = server.listen(server_name)
     window = MainWindow()
-    window.show()
+
+    def open_existing_window():
+        while server.hasPendingConnections():
+            client = server.nextPendingConnection()
+            client.disconnectFromServer()
+            client.deleteLater()
+        window.show_and_raise()
+
+    server.newConnection.connect(open_existing_window)
+    start_in_tray = (
+        start_requested
+        and listening
+        and bool(window.config["ip"] and window.config["token"])
+        and QSystemTrayIcon.isSystemTrayAvailable()
+    )
+    if not start_in_tray:
+        window.show()
     sys.exit(app.exec())
 
 

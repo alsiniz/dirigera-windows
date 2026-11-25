@@ -25,6 +25,11 @@ jobs:
       - run: python packaging/build_windows.py --portable-exe
         env:
           QT_QPA_PLATFORM: offscreen
+      - name: Verify installer and startup shortcuts
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release -Filter '*-Setup.exe'
+          ./packaging/test_installer.ps1 -Installer $installer.FullName
       - uses: actions/upload-artifact@v4
         with:
           name: dirigera-windows-x64-installer

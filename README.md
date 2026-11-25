@@ -1,68 +1,111 @@
 # DIRIGERA for Windows
 
-Control IKEA DIRIGERA lights from the Windows system tray. Scroll to dim,
-middle-click to toggle room lights, and hover for climate readings.
+**Control your IKEA DIRIGERA smart home hub from the Windows system tray.**
 
-The app communicates directly with your hub on the local network. It requires
-no cloud login or additional automation server.
+Dim lights without opening a window, control individual bulbs or whole rooms,
+and see temperature and humidity at a glance. The app talks directly to your
+hub over your local network.
 
-This is an MIT-licensed port of [DIRIGERA Plasma](https://github.com/alsiniz/dirigera-plasma)
-by alsiniz and contributors, based on upstream commit
-[`a334176`](https://github.com/alsiniz/dirigera-plasma/commit/a334176309953518c76e9b2339e4c152c99556ae).
+[![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
+[![Platform: Windows 11 x64](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078d4.svg)](#requirements)
 
-## Windows downloads
+This is the Qt-based Windows port of [DIRIGERA Plasma](https://github.com/alsiniz/dirigera-plasma),
+based on upstream commit [`a334176`](https://github.com/alsiniz/dirigera-plasma/commit/a334176309953518c76e9b2339e4c152c99556ae).
 
-The build targets **Windows 11 x64**.
+## Why DIRIGERA for Windows?
+
+- **Local control.** Use your existing hub over the LAN without a cloud login
+  or a separate automation server.
+- **Quick tray controls.** Scroll over the lightbulb icon to dim or brighten.
+  Middle-click to toggle the approved lights in your selected room.
+- **In-app pairing.** Generate the hub access token from **Hub settings**.
+- **Shared households.** Choose exactly which lights the app can control and
+  which climate sensors it can read.
+- **Live colour control.** Adjust power, brightness, and colour temperature
+  for rooms or individual bulbs. Preview changes with the live colour wheel
+  on bulbs that support RGB.
+
+## Requirements
+
+- **Windows 11 x64.**
+- An **IKEA DIRIGERA hub** with lights or climate sensors set up in IKEA Home Smart.
+- Your PC and hub must be able to reach each other on the local network.
+
+The installer and portable executable include Python and Qt. Your existing
+hub continues to manage its devices.
+
+## Install
+
+Download **v1.0.0-rc.1** from [GitHub Releases](https://github.com/alsiniz/dirigera-windows/releases/tag/v1.0.0-rc.1).
 
 | Download | How to use it |
-|---|---|
-| `DIRIGERA-Windows-<version>-x64-Setup.exe` | Recommended. Installs for your Windows account, adds a Start menu shortcut, and provides an uninstaller. It does not request administrator privileges. |
-| `DIRIGERA-Windows-<version>-x64-Portable.exe` | Run the standalone executable without installing. It unpacks its bundled libraries to a temporary folder at launch. |
-| `DIRIGERA-Windows-<version>-x64-Portable.zip` | Extract the entire folder and run `Dirigera.exe`. Keep the `_internal` folder alongside it. |
+| --- | --- |
+| **Installer** · `DIRIGERA-Windows-1.0.0-rc.1-x64-Setup.exe` | Installs for your Windows account, adds a **DIRIGERA for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start DIRIGERA when I sign in** during setup to enable startup. |
+| **Portable** · `DIRIGERA-Windows-1.0.0-rc.1-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
 
-For the unsigned test builds, open **Actions → Windows builds**, select the
-successful run, and download **dirigera-windows-x64-portable-exe** or
-**dirigera-windows-x64-installer** under **Artifacts**. GitHub wraps each
-artifact in a ZIP. Extract the download, then run the executable inside.
+> **Windows publisher verification.** This release candidate is unsigned.
+> Microsoft SmartScreen can show an unverified-publisher warning, and Smart App
+> Control can block execution. A publicly trusted signature is the supported
+> route for distributing the app to machines with Smart App Control enabled.
+> [Microsoft Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)
 
-All packages include Python and Qt and use the same settings under
-`%LOCALAPPDATA%\DIRIGERA\config.json`. Delete that folder to clear your saved
-hub authorization and app preferences. Treat the configuration file as private.
-The access token can control the whole hub, while the app limits its own
-actions to approved devices.
-
-## Connect your hub
+### Connect your hub through the app
 
 1. Open **Hub settings** and enter the hub's local IP address or hostname.
-2. Choose **Generate token**. Follow the prompt to press the physical
-   action button on the hub and click **Continue**.
-3. Save the connection, then open **Choose devices** and approve the bulbs and
-   climate sensors you want to use.
+   Look in your router's connected-device list if you need the address.
+2. Select **Generate token**. Press the physical action button underneath the
+   hub when prompted, then select **Continue**.
+3. Select **Save** to keep the new token. The app fills in the masked token field.
+4. Open **Choose devices** and approve the bulbs and sensors you want to use.
 
-The main window offers room and individual light controls for power, brightness,
-colour temperature and live colour where supported. The Climate tab displays
-approved temperature and humidity sensors.
+A DHCP reservation in your router helps the hub keep the same IP address.
 
-## System tray controls
+## Control from the Windows tray
 
-If Windows puts the lightbulb icon behind the tray chevron, drag it out to
-the area by the clock. Choose the controlled room in **Tray settings**.
+Look for the **lightbulb icon** by the clock. If Windows puts it behind the
+tray chevron, drag it out to the area by the clock. Choose the controlled room
+in **Tray settings**.
 
-| Gesture | Action |
-|---|---|
-| Hover | See approved temperature and humidity readings. |
-| Scroll up or down | Change the brightness of approved lights that are on in the selected room, by 5% per wheel notch. A brief overlay shows the target brightness. |
-| Middle-click | Toggle the approved lights in the selected room together. |
-| Left-click | Open the controls window. |
-| Right-click | Open the tray menu with room selection, settings, refresh and Quit. |
+| Interaction | What happens |
+| --- | --- |
+| **Hover** | See temperature and humidity from approved climate sensors. |
+| **Scroll up or down** | Change brightness in 5% steps for approved lights that are already on. |
+| **Middle-click** | Toggle approved lights in the selected room together. |
+| **Left-click** | Open the full controls window. |
+| **Right-click** | Open the tray menu for quick actions, settings, and Quit. |
 
-Closing the window keeps the tray controls available. Use **Quit** in the tray
-menu or **Ctrl+Q** in the main window to exit. **Tray settings → Input diagnostics**
-shows whether the wheel hook is receiving input over the icon.
+A brief overlay shows the target brightness as you scroll. Closing the window
+keeps the app in the tray. Select **Quit** from the tray menu or press **Ctrl+Q**
+in the main window to exit.
+
+## Shared households and privacy
+
+- **Only approved bulbs receive commands.** Approvals are tied to device IDs
+  and their rooms. Review a bulb again if it moves to a different room.
+- **Climate sensors are read-only.** The Climate tab can combine temperature
+  and humidity from supported split-endpoint devices such as IKEA TIMMERFLOTTE.
+- **Keep your access token private.** The hub token can control the whole hub.
+  The installer and portable executable both use
+  `%LOCALAPPDATA%\DIRIGERA\config.json` for settings, including the token.
+- **The app uses the unofficial local DIRIGERA API.** IKEA firmware changes
+  may affect compatibility.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Pairing cannot start | Enter the hub address by itself, without a URL or port. Check reachability on the local network. |
+| Pairing fails after you click Continue | Start a new pairing request and press the physical action button when prompted. |
+| A bulb or sensor is missing | Open **Choose devices** and review newly added or moved devices. |
+| Colour options are unavailable | Check whether the bulbs support RGB or colour temperature. |
+| Tray scrolling or middle-click does nothing | Move the lightbulb out of tray overflow. Open **Tray settings → Input diagnostics** to see whether input reached the app. |
+
+When reporting a problem, include the app version, Windows version, and
+the steps to reproduce it. Keep your token and configuration file private.
 
 ## Run from source
 
-In PowerShell on Windows, from the repo root with Python 3.12 x64 installed:
+In PowerShell on Windows with Python 3.12 x64:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -72,7 +115,7 @@ py -3.12 -m venv .venv
 
 ## Build and test
 
-Install Inno Setup 6 and run:
+Install Inno Setup 6, then run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
@@ -80,21 +123,21 @@ Install Inno Setup 6 and run:
 .\.venv\Scripts\python.exe packaging/build_windows.py --portable-exe
 ```
 
-The build writes the packages to `release\`. Pass `--iscc` with the compiler
-path if it is installed in a custom location. The Windows GitHub Actions
-workflow builds unsigned test artifacts. Sign the app and setup executable
-before a public release using the publisher's Authenticode identity. Sign
-`dist\Dirigera\Dirigera.exe`, rebuild the installer and ZIP with
-`packaging/build_windows.py --package-only`, then sign the setup executable.
+The packages are written to `release\`. Pass `--iscc` if the compiler is
+in a custom location. The **Windows builds** GitHub Actions workflow runs
+the tests, checks the packaged apps, and verifies installer startup choices.
 
-For release testing, use an interactive Windows 11 desktop with a DIRIGERA hub.
-Install from a standard account and repeat with the portable executable on a
-machine without Python. Pair from a fresh configuration. Check tray scrolling in both
-directions, middle-click, left-click, right-click, the climate tooltip, and the
-brightness overlay. Verify that scrolling over other icons passes through and
-that scrolling over DIRIGERA leaves off and unapproved bulbs alone. Test an
-Explorer restart and any mixed-DPI taskbar layout being supported. Verify that
-the installer upgrade and uninstall work while the app is in the tray.
+For trusted direct downloads, use a publicly trusted Authenticode signer.
+Sign `dist\Dirigera\Dirigera.exe` before rebuilding the installer with
+`packaging/build_windows.py --package-only --portable-exe`. Sign the setup
+and standalone portable executables after packaging.
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream component and
-license information.
+## Built with and thanks
+
+- [DIRIGERA Plasma](https://github.com/alsiniz/dirigera-plasma) by alsiniz
+  and contributors, the original desktop controller.
+- [dirigera](https://github.com/Leggin/dirigera) for the local hub client.
+- [Qt for Python](https://doc.qt.io/qtforpython-6/) for the desktop interface.
+
+This independent community project is licensed under [MIT](LICENSE).
+See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components.

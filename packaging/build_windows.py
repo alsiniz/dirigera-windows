@@ -39,6 +39,8 @@ def find_iscc():
 def copy_licenses():
     output = APP / "licenses"
     shutil.copytree(ROOT / "packaging" / "qt-licenses", output / "Qt", dirs_exist_ok=True)
+    shutil.copy2(ROOT / "LICENSE", output / "DIRIGERA-LICENSE.txt")
+    shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", output / "THIRD_PARTY_NOTICES.md")
     pending = deque(Requirement(line) for line in (ROOT / "requirements.txt").read_text().splitlines())
     installed = {}
     while pending:
@@ -73,6 +75,7 @@ def copy_licenses():
 
 
 def freeze_app(name, mode, output):
+    extra_data = ["--add-data", f"{APP / 'licenses'}:licenses"] if mode == "--onefile" else []
     subprocess.run(
         [
             sys.executable, "-m", "PyInstaller",
@@ -81,6 +84,7 @@ def freeze_app(name, mode, output):
             "--distpath", str(output), "--workpath", str(BUILD / "pyinstaller"),
             "--specpath", str(BUILD),
             "--add-data", f"{APP_ICON}:assets",
+            *extra_data,
             "--copy-metadata", "PySide6-Essentials", "--copy-metadata", "dirigera",
             str(ROOT / "app.py"),
         ],

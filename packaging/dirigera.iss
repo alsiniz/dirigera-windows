@@ -25,8 +25,15 @@ RestartApplications=no
 [Files]
 Source: "..\dist\Dirigera\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[Tasks]
+Name: "autostart"; Description: "Start DIRIGERA when I sign in"; GroupDescription: "Windows startup:"; Flags: unchecked
+
+[InstallDelete]
+Type: files; Name: "{userstartup}\{#AppName}.lnk"; Tasks: not autostart
+
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"; WorkingDir: "{app}"; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
