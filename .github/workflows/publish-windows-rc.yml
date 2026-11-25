@@ -1,0 +1,61 @@
+name: Publish Windows release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the draft prerelease (for example, v1.0.0-rc.1)
+        required: true
+        type: string
+      build_run_id:
+        description: Successful Windows builds run on main
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: windows-rc-${{ inputs.tag }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+    steps:
+      - name: Verify draft and build commit
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          review=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID")
+          build_sha=$(jq -er --arg repo "$GITHUB_REPOSITORY" '
+            select(.head_repository.full_name == $repo
+              and .head_branch == "main"
+              and .path == ".github/workflows/windows.yml"
+              and (.event == "push" or .event == "workflow_dispatch")
+              and .conclusion == "success")
+            | .head_sha
+          ' <<< "$review")
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,targetCommitish | jq -e --arg sha "$build_sha" \
+            '.isDraft and .isPrerelease and .targetCommitish == $sha'
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run_id }}
+          pattern: dirigera-windows-x64-*
+          merge-multiple: true
+          path: artifacts
+      - name: Upload executables and publish prerelease
+        shell: bash
+        run: |
+          prefix="artifacts/DIRIGERA-Windows-${RELEASE_TAG#v}-x64"
+          test -s "$prefix-Portable.exe"
+          test -s "$prefix-Setup.exe"
+          gh release upload "$RELEASE_TAG" "$prefix-Portable.exe" "$prefix-Setup.exe" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
