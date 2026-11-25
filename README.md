@@ -1,6 +1,8 @@
 # DIRIGERA for Windows
 
-Control IKEA DIRIGERA lights and read approved climate sensors from Windows.
+Control IKEA DIRIGERA lights from the Windows system tray. Scroll to dim,
+middle-click to toggle room lights, and hover for climate readings.
+
 The app communicates directly with your hub on the local network. It requires
 no cloud login or additional automation server.
 
