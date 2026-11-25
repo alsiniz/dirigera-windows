@@ -371,8 +371,11 @@ class ConnectionDialog(QDialog):
         form.addRow("Hub address", self.ip)
         form.addRow("Access token", token_row)
         outer.addLayout(form)
-        self.ip.textChanged.connect(self.update_generate_button)
-        self.update_generate_button()
+        self.address_help = QLabel()
+        self.address_help.setWordWrap(True)
+        outer.addWidget(self.address_help)
+        self.ip.textEdited.connect(self.reset_address_help)
+        self.reset_address_help()
         ip_note = QLabel(
             "<b>Recommended: reserve an IP address for DIRIGERA.</b> "
             "Set a DHCP reservation in your router so the hub keeps the same local IP address. "
@@ -387,12 +390,20 @@ class ConnectionDialog(QDialog):
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
 
-    def update_generate_button(self, *_):
-        self.generate_button.setEnabled(valid_hub_address(self.ip.text()))
+    def reset_address_help(self, *_):
+        self.address_help.setText(
+            "Find the hub's local IP address in your router's connected-device list."
+        )
 
     def generate_token(self):
         ip = self.ip.text().strip()
         if not valid_hub_address(ip):
+            self.address_help.setText(
+                "Enter the hub's local IP address or hostname first, such as 192.168.1.20. "
+                "Use the address by itself."
+            )
+            self.ip.setFocus()
+            self.ip.selectAll()
             return
         pairing = TokenPairingDialog(self, ip)
         if pairing.exec() == QDialog.DialogCode.Accepted and pairing.generated_token:

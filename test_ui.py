@@ -1,6 +1,7 @@
 """Qt slider regression test. Run with QT_QPA_PLATFORM=offscreen on CI."""
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
@@ -84,15 +85,16 @@ class ConnectionDialogTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_generate_button_requires_valid_hub_address(self):
+    def test_generate_button_guides_user_when_address_is_missing(self):
         dialog = ConnectionDialog(None, {})
-        self.assertFalse(dialog.generate_button.isEnabled())
-        dialog.ip.setText('not a valid hub')
-        self.assertFalse(dialog.generate_button.isEnabled())
-        dialog.ip.setText('192.168.1.20')
         self.assertTrue(dialog.generate_button.isEnabled())
-        dialog.ip.setText('192.168.1.999')
-        self.assertFalse(dialog.generate_button.isEnabled())
+        with patch('app.TokenPairingDialog') as pairing:
+            dialog.generate_button.click()
+            self.assertIn('Enter the hub', dialog.address_help.text())
+            pairing.assert_not_called()
+            dialog.ip.setText(' 192.168.1.20 ')
+            dialog.generate_button.click()
+            pairing.assert_called_once_with(dialog, '192.168.1.20')
         dialog.close()
 
     def test_dialog_has_minimum_size_for_dhcp_note(self):
