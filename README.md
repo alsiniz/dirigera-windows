@@ -36,12 +36,12 @@ hub continues to manage its devices.
 
 ## Install
 
-Download **v1.0.0-rc.1** from [GitHub Releases](https://github.com/alsiniz/dirigera-windows/releases/tag/v1.0.0-rc.1).
+Download **v1.0.0-rc.2** from [GitHub Releases](https://github.com/alsiniz/dirigera-windows/releases/tag/v1.0.0-rc.2).
 
 | Download | How to use it |
 | --- | --- |
-| **Installer** · `DIRIGERA-Windows-1.0.0-rc.1-x64-Setup.exe` | Installs for your Windows account, adds a **DIRIGERA for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start DIRIGERA when I sign in** during setup to enable startup. |
-| **Portable** · `DIRIGERA-Windows-1.0.0-rc.1-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
+| **Installer** · `DIRIGERA-Windows-1.0.0-rc.2-x64-Setup.exe` | Installs for your Windows account, adds a **DIRIGERA for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start DIRIGERA when I sign in** during setup to enable startup. |
+| **Portable** · `DIRIGERA-Windows-1.0.0-rc.2-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
 
 > **Windows publisher verification.** This release candidate is unsigned.
 > Microsoft SmartScreen can show an unverified-publisher warning, and Smart App
@@ -131,6 +131,8 @@ For trusted direct downloads, use a publicly trusted Authenticode signer.
 Sign `dist\Dirigera\Dirigera.exe` before rebuilding the installer with
 `packaging/build_windows.py --package-only --portable-exe`. Sign the setup
 and standalone portable executables after packaging.
+
+See [CHANGELOG.md](CHANGELOG.md) for the changes in each release candidate.
 
 ## Built with and thanks
 

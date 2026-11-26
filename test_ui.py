@@ -1,15 +1,18 @@
 """Qt slider regression test. Run with QT_QPA_PLATFORM=offscreen on CI."""
+from dataclasses import replace
 import os
 import unittest
 from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PySide6.QtCore import Qt, QPoint, QPointF
+    from PySide6.QtCore import Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer
     from PySide6.QtTest import QTest
     from PySide6.QtGui import QWheelEvent
-    from PySide6.QtWidgets import QApplication, QWidget, QPushButton
-    from app import ClickToJumpSlider, TraySettingsDialog, ConnectionDialog
+    from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea
+    from shiboken6 import isValid
+    from app import ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
+    from core import EnvironmentInfo, LightInfo
 except ImportError:
     ClickToJumpSlider = None
 
@@ -102,6 +105,70 @@ class ConnectionDialogTests(unittest.TestCase):
         self.assertGreaterEqual(dialog.minimumHeight(), 335)
         self.assertGreaterEqual(dialog.minimumWidth(), 620)
         dialog.close()
+
+
+
+@unittest.skipUnless(ClickToJumpSlider is not None, 'PySide6 not installed')
+class RefreshLifetimeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        config = dict(ip='test', token='test', approved={'lamp': 'room'}, approved_sensors={'sensor': 'room'})
+        self.enterContext(patch('app.read_config', return_value=config))
+        self.enterContext(patch.object(MainWindow, 'start_worker'))
+        self.enterContext(patch('app.TrayWheelHook.start'))
+        self.enterContext(patch('app.QSystemTrayIcon.show'))
+        self.window = MainWindow()
+        self.addCleanup(self.flush_deletions)
+        self.addCleanup(self.window.deleteLater)
+        self.light = LightInfo('lamp', 'Desk', 'room', 'Study', True, ('isOn', 'lightLevel'),
+                               True, 50, None, None, None, 0, 1)
+        self.sensor = EnvironmentInfo('sensor', 'Climate', 'room', 'Study', True, 20, 50, 90)
+
+    def flush_deletions(self):
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_repeated_refresh_disposes_old_pages_and_reuses_menu(self):
+        window = self.window
+        welcome = window.tabs.widget(0)
+        window.on_loaded(([self.light], [self.sensor], ''))
+        room, climate = (window.tabs.widget(i) for i in range(2))
+        window.tabs.setCurrentIndex(1)
+        submenu, = window._tray_menu.findChildren(QMenu)
+        automatic, study = submenu.actions()
+        for _ in range(20):
+            window.on_loaded(([self.light], [self.sensor], ''))
+            self.flush_deletions()
+        self.assertFalse(any(isValid(page) for page in (welcome, room, climate)))
+        self.assertEqual(window.tabs.currentIndex(), 1)
+        self.assertEqual(len(window.tabs.findChildren(QScrollArea)), 2)
+        self.assertEqual(window._tray_menu.findChildren(QMenu), [submenu])
+        self.assertEqual(submenu.actions(), [automatic, study])
+        with patch('app.write_config'):
+            study.trigger()
+            self.assertEqual(window.config['tray_room'], 'room')
+            self.assertTrue(study.isChecked())
+            automatic.trigger()
+            self.assertEqual(window.config['tray_room'], '')
+            self.assertTrue(automatic.isChecked())
+        window.on_loaded(([replace(self.light, room_name='Office')], [], ''))
+        self.flush_deletions()
+        self.assertEqual([a.text() for a in submenu.actions()], ['Automatic (one approved room)', 'Office'])
+        window.on_loaded(([], [], ''))
+        self.flush_deletions()
+        self.assertEqual(len(submenu.actions()), 1)
+        self.assertFalse(window.tabs.findChildren(QScrollArea))
+        self.assertEqual(window.tabs.count(), 1)
+
+    def test_tray_settings_is_disposed_after_save_and_cancel(self):
+        for dismiss in ('accept', 'reject'):
+            QTimer.singleShot(0, lambda: getattr(self.app.activeModalWidget(), dismiss)())
+            with patch('app.write_config'):
+                self.window.change_tray_settings()
+            self.flush_deletions()
+            self.assertFalse(self.window.findChildren(TraySettingsDialog))
 
 
 if __name__ == '__main__':
