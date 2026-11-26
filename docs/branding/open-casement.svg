@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img">
+  <title>Lysnav · Open Casement</title>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="#163F3A"/>
+  <path fill="#FCF6E9" fill-rule="evenodd" d="M12 16h40v29.5h2V50H10v-4.5h2Zm5 5v24h14V21Zm19 0v24h11V21Z"/>
+  <path fill="#F2B65E" d="M17 21h14v24H17Z"/>
+  <path fill="#FCF6E9" fill-rule="evenodd" d="m32 18 12 5v18l-12 6Zm4 7v15l4-2V26.7Z"/>
+</svg>

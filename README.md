@@ -152,4 +152,4 @@ See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components.
 
 ## Lysnav editions
 
-The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the three icon proposals](docs/branding/README.md).
+The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the icon proposals](docs/branding/README.md).

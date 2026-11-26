@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img">
+  <title>Lysnav · Gable Window</title>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="#163F3A"/>
+  <path fill="#FCF6E9" fill-rule="evenodd" d="M32 10 52 27v24H12V27Zm0 6.6L17 29.3V46h30V29.3Z"/>
+  <rect fill="#F2B65E" x="26" y="28.5" width="12" height="12" rx="1"/>
+</svg>
