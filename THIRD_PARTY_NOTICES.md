@@ -1,6 +1,6 @@
 # Third-party components
 
-This project is a Windows port of [DIRIGERA Plasma](https://github.com/alsiniz/dirigera-plasma)
+This project is a Windows port of [Lysnav for KDE Plasma](https://github.com/alsiniz/dirigera-plasma)
 by alsiniz and contributors. The upstream MIT license is included in [LICENSE](LICENSE).
 
 | Component | Purpose | License |

@@ -1,11 +1,11 @@
-#define AppName "DIRIGERA for Windows"
-#define AppExe "Dirigera.exe"
+#define AppName "Lysnav for Windows"
+#define AppExe "Lysnav.exe"
 
 [Setup]
 AppId={{987A148D-E765-45DD-AFA9-B462D85EDA6C}
 AppName={#AppName}
 AppVersion={#AppVersion}
-DefaultDirName={localappdata}\Programs\DIRIGERA
+DefaultDirName={localappdata}\Programs\Lysnav
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -13,22 +13,26 @@ MinVersion=10.0.22000
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\release
-OutputBaseFilename=DIRIGERA-Windows-{#AppVersion}-x64-Setup
-SetupIconFile=..\assets\dirigera.ico
+OutputBaseFilename=Lysnav-Windows-{#AppVersion}-x64-Setup
+SetupIconFile=..\assets\lysnav.ico
 UninstallDisplayIcon={app}\{#AppExe}
 Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
-CloseApplicationsFilter={#AppExe}
+CloseApplicationsFilter={#AppExe},Dirigera.exe
 RestartApplications=no
 
 [Files]
-Source: "..\dist\Dirigera\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Lysnav\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Tasks]
-Name: "autostart"; Description: "Start DIRIGERA when I sign in"; GroupDescription: "Windows startup:"; Flags: unchecked
+Name: "autostart"; Description: "Start Lysnav when I sign in"; GroupDescription: "Windows startup:"; Flags: unchecked
 
 [InstallDelete]
+; Retire files owned by the previous release on upgrade.
+Type: files; Name: "{app}\Dirigera.exe"
+Type: files; Name: "{autoprograms}\DIRIGERA for Windows.lnk"
+Type: files; Name: "{userstartup}\DIRIGERA for Windows.lnk"
 Type: files; Name: "{userstartup}\{#AppName}.lnk"; Tasks: not autostart
 
 [Icons]

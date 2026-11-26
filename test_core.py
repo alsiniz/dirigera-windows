@@ -1,11 +1,14 @@
 """Offline safety tests: python3 -m unittest -v test_core.py"""
 import json
+import os
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 from types import SimpleNamespace as N
 from unittest.mock import patch
-from core import apply, approved_visible, light_info, read_config, temp_range, write_config
+
+from core import apply, approved_visible, config_path, light_info, read_config, temp_range, write_config
+
 
 
 class SettingsTests(unittest.TestCase):
@@ -25,6 +28,23 @@ class SettingsTests(unittest.TestCase):
                 self.assertEqual(config, saved)
                 write_config(config)
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
+
+
+class ConfigUpgradeTests(unittest.TestCase):
+    def test_existing_pairing_and_approvals_survive_rebrand(self):
+        with TemporaryDirectory() as folder, patch.dict(os.environ, {"LOCALAPPDATA": folder}):
+            old = Path(folder) / "DIRIGERA" / "config.json"
+            old.parent.mkdir()
+            settings = dict(ip="hub.local", token="test-token", approved={"lamp": "room"},
+                            approved_sensors={"sensor": "room"}, tray_room="room")
+            old.write_text(json.dumps(settings), encoding="utf-8")
+            self.assertEqual(config_path(), Path(folder) / "Lysnav" / "config.json")
+            self.assertEqual(read_config(), settings)
+
+            # Revoking approval in Lysnav must take precedence over the older file.
+            write_config({**settings, "approved": {}})
+            self.assertEqual(read_config()["approved"], {})
+            self.assertEqual(json.loads(old.read_text(encoding="utf-8")), settings)
 
 
 class FakeLight:

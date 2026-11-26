@@ -178,11 +178,14 @@ def apply(hub: Any, approved: dict[str, str], target_ids: list[str], action: str
 
 def config_path() -> Path:
     root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-    return root / "DIRIGERA" / "config.json"
+    return root / "Lysnav" / "config.json"
 
 
 def read_config() -> dict:
     path = config_path()
+    if not path.exists():
+        # Read the previous installation until Lysnav saves its first settings.
+        path = path.parent.parent / "DIRIGERA" / path.name
     if not path.exists():
         return {"ip": "", "token": "", "approved": {}, "approved_sensors": {},
                 "tray_room": ""}

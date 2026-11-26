@@ -15,10 +15,10 @@ from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
-APP_ICON = ROOT / "assets" / "dirigera.ico"
+APP_ICON = ROOT / "assets" / "lysnav.ico"
 DIST = ROOT / "dist"
 RELEASE = ROOT / "release"
-APP = DIST / "Dirigera"
+APP = DIST / "Lysnav"
 PORTABLE_EXE = RELEASE / "portable-exe"
 BUNDLE_DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md")
 
@@ -39,7 +39,7 @@ def find_iscc():
 def copy_licenses():
     output = APP / "licenses"
     shutil.copytree(ROOT / "packaging" / "qt-licenses", output / "Qt", dirs_exist_ok=True)
-    shutil.copy2(ROOT / "LICENSE", output / "DIRIGERA-LICENSE.txt")
+    shutil.copy2(ROOT / "LICENSE", output / "Lysnav-LICENSE.txt")
     shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", output / "THIRD_PARTY_NOTICES.md")
     pending = deque(Requirement(line) for line in (ROOT / "requirements.txt").read_text().splitlines())
     installed = {}
@@ -94,7 +94,7 @@ def freeze_app(name, mode, output):
 
 
 def build_app():
-    freeze_app("Dirigera", "--onedir", DIST)
+    freeze_app("Lysnav", "--onedir", DIST)
     copy_licenses()
     for filename in BUNDLE_DOCUMENTS:
         shutil.copy2(ROOT / filename, APP / filename)
@@ -124,7 +124,7 @@ def main():
     sys.path.insert(0, str(ROOT))
     from version import VERSION
 
-    portable_name = f"DIRIGERA-Windows-{VERSION}-x64-Portable"
+    portable_name = f"Lysnav-Windows-{VERSION}-x64-Portable"
     portable_executable = PORTABLE_EXE / f"{portable_name}.exe"
     if not args.package_only:
         BUILD.mkdir(exist_ok=True)
@@ -134,17 +134,17 @@ def main():
             shutil.copytree(APP / "licenses", PORTABLE_EXE / "licenses", dirs_exist_ok=True)
             for filename in BUNDLE_DOCUMENTS:
                 shutil.copy2(APP / filename, PORTABLE_EXE / filename)
-    elif not (APP / "Dirigera.exe").is_file():
+    elif not (APP / "Lysnav.exe").is_file():
         parser.error("Run a full build before using --package-only")
     elif args.portable_exe and not portable_executable.is_file():
         parser.error("Run a full build with --portable-exe first")
 
-    check_runtime(APP / "Dirigera.exe")
+    check_runtime(APP / "Lysnav.exe")
     if args.portable_exe:
         check_runtime(portable_executable)
     RELEASE.mkdir(exist_ok=True)
     subprocess.run(
-        [str(iscc.resolve()), f"/DAppVersion={VERSION}", str(ROOT / "packaging" / "dirigera.iss")],
+        [str(iscc.resolve()), f"/DAppVersion={VERSION}", str(ROOT / "packaging" / "lysnav.iss")],
         check=True,
         cwd=ROOT,
     )
@@ -154,7 +154,7 @@ def main():
         root_dir=DIST,
         base_dir=APP.name,
     )
-    for artifact in sorted(RELEASE.glob(f"DIRIGERA-Windows-{VERSION}-x64-*")):
+    for artifact in sorted(RELEASE.glob(f"Lysnav-Windows-{VERSION}-x64-*")):
         print(artifact)
     if args.portable_exe:
         print(portable_executable)

@@ -1,4 +1,8 @@
-# DIRIGERA for Windows
+# Lysnav for Windows
+
+The name **Lysnav** is a Scandinavian-inspired combination of *lys* (light) and *nav* (hub).
+
+Lysnav is an independent third-party application and is not affiliated with, endorsed by, or sponsored by IKEA.
 
 **Control your IKEA DIRIGERA smart home hub from the Windows system tray.**
 
@@ -9,10 +13,10 @@ hub over your local network.
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![Platform: Windows 11 x64](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078d4.svg)](#requirements)
 
-This is the Qt-based Windows port of [DIRIGERA Plasma](https://github.com/alsiniz/dirigera-plasma),
+This is the Qt-based Windows port of [Lysnav for KDE Plasma](https://github.com/alsiniz/dirigera-plasma),
 based on upstream commit [`a334176`](https://github.com/alsiniz/dirigera-plasma/commit/a334176309953518c76e9b2339e4c152c99556ae).
 
-## Why DIRIGERA for Windows?
+## Why Lysnav for Windows?
 
 - **Local control.** Use your existing hub over the LAN without a cloud login
   or a separate automation server.
@@ -36,7 +40,7 @@ hub continues to manage its devices.
 
 ## Install
 
-Download **v1.0.0-rc.2** from [GitHub Releases](https://github.com/alsiniz/dirigera-windows/releases/tag/v1.0.0-rc.2).
+Download the **pre-rebrand v1.0.0-rc.2** from [GitHub Releases](https://github.com/alsiniz/dirigera-windows/releases/tag/v1.0.0-rc.2).
 
 | Download | How to use it |
 | --- | --- |
@@ -86,7 +90,7 @@ in the main window to exit.
   and humidity from supported split-endpoint devices such as IKEA TIMMERFLOTTE.
 - **Keep your access token private.** The hub token can control the whole hub.
   The installer and portable executable both use
-  `%LOCALAPPDATA%\DIRIGERA\config.json` for settings, including the token.
+  `%LOCALAPPDATA%\Lysnav\config.json` for settings, including the token.
 - **The app uses the unofficial local DIRIGERA API.** IKEA firmware changes
   may affect compatibility.
 
@@ -104,6 +108,8 @@ When reporting a problem, include the app version, Windows version, and
 the steps to reproduce it. Keep your token and configuration file private.
 
 ## Run from source
+
+Quit any running pre-rebrand version first. Lysnav reads its saved pairing, device approvals, and preferences from the previous Windows configuration. Subsequent changes are saved to `%LOCALAPPDATA%\Lysnav\config.json`.
 
 In PowerShell on Windows with Python 3.12 x64:
 
@@ -123,12 +129,12 @@ Install Inno Setup 6, then run:
 .\.venv\Scripts\python.exe packaging/build_windows.py --portable-exe
 ```
 
-The packages are written to `release\`. Pass `--iscc` if the compiler is
+The installer installs `Lysnav.exe`. New download names follow `Lysnav-Windows-<version>-x64-Setup.exe` and `Lysnav-Windows-<version>-x64-Portable.exe`. The packages are written to `release\`. Pass `--iscc` if the compiler is
 in a custom location. The **Windows builds** GitHub Actions workflow runs
 the tests, checks the packaged apps, and verifies installer startup choices.
 
 For trusted direct downloads, use a publicly trusted Authenticode signer.
-Sign `dist\Dirigera\Dirigera.exe` before rebuilding the installer with
+Sign `dist\Lysnav\Lysnav.exe` before rebuilding the installer with
 `packaging/build_windows.py --package-only --portable-exe`. Sign the setup
 and standalone portable executables after packaging.
 
@@ -136,10 +142,14 @@ See [CHANGELOG.md](CHANGELOG.md) for the changes in each release candidate.
 
 ## Built with and thanks
 
-- [DIRIGERA Plasma](https://github.com/alsiniz/dirigera-plasma) by alsiniz
+- [Lysnav for KDE Plasma](https://github.com/alsiniz/dirigera-plasma) by alsiniz
   and contributors, the original desktop controller.
 - [dirigera](https://github.com/Leggin/dirigera) for the local hub client.
 - [Qt for Python](https://doc.qt.io/qtforpython-6/) for the desktop interface.
 
 This independent community project is licensed under [MIT](LICENSE).
 See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components.
+
+## Lysnav editions
+
+The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the three icon proposals](docs/branding/README.md).

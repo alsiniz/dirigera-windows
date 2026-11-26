@@ -380,7 +380,7 @@ class ConnectionDialog(QDialog):
         ip_note = QLabel(
             "<b>Recommended: reserve an IP address for DIRIGERA.</b> "
             "Set a DHCP reservation in your router so the hub keeps the same local IP address. "
-            "This helps DIRIGERA reconnect reliably. See your router's manual "
+            "This helps Lysnav reconnect reliably. See your router's manual "
             "for instructions on configuring DHCP reservations."
         )
         ip_note.setWordWrap(True)
@@ -561,7 +561,7 @@ class TraySettingsDialog(QDialog):
         layout.addLayout(form)
         shortcuts = QGroupBox("System tray shortcuts")
         shortcut_layout = QVBoxLayout(shortcuts)
-        intro = QLabel("Use the DIRIGERA icon by the clock. If it is hidden, drag it out of the system tray overflow.")
+        intro = QLabel("Use the Lysnav icon by the clock. If it is hidden, drag it out of the system tray overflow.")
         intro.setWordWrap(True)
         shortcut_layout.addWidget(intro)
         scroll_tip = QLabel(
@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         header = QHBoxLayout()
-        heading = QLabel("DIRIGERA  /  My lights")
+        heading = QLabel("Lysnav  /  My lights")
         heading.setStyleSheet("font-weight: 700; font-size: 19px; padding: 5px 0")
         header.addWidget(heading, stretch=1)
         self.approvals_btn = QPushButton("Choose devices")
@@ -793,10 +793,11 @@ class MainWindow(QMainWindow):
         text.setOpenExternalLinks(True)
         text.setHtml(f"""
             <p>A local controller for IKEA DIRIGERA on Windows.</p>
+            <p>Lysnav is an independent third-party application and is not affiliated with, endorsed by, or sponsored by IKEA.</p>
             <p><b>Features:</b> approved-only lighting controls, live colour selection,
             Kelvin and brightness sliders, read-only climate sensors, and Windows
             system tray controls.</p>
-            <p><b>Development:</b> <a href='https://github.com/alsiniz/dirigera-plasma'>alsiniz</a> (creator of DIRIGERA Plasma), with implementation and troubleshooting assistance from <a href='https://openai.com/'>OpenAI ChatGPT</a>.</p>
+            <p><b>Development:</b> <a href='https://github.com/alsiniz'>alsiniz</a> (creator of Lysnav for KDE Plasma), with implementation and troubleshooting assistance from <a href='https://openai.com/'>OpenAI ChatGPT</a>.</p>
             <p><b>Open-source components:</b></p>
             <ul>
             <li><a href='https://github.com/Leggin/dirigera'>dirigera</a>
@@ -806,12 +807,10 @@ class MainWindow(QMainWindow):
                 {installed_version('PySide6-Essentials')}, LGPLv3/GPLv3/commercial options,
                 by The Qt Company and Qt for Python contributors.</li>
             </ul>
-            <p>This Windows port is based on DIRIGERA Plasma and shared under the <b>MIT License</b>.
+            <p>This Windows port is based on Lysnav for KDE Plasma and shared under the <b>MIT License</b>.
             Free to use, modify, share, and sell, with
             preservation of the copyright and license notice. See the LICENSE file for exact terms.
-            Upstream components keep their own licenses.</p><p>
-            It is an independent community project, not affiliated with or
-            endorsed by IKEA or the upstream library maintainers.</p>
+            Upstream components keep their own licenses. The upstream library maintainers do not endorse this project.</p>
             <p><b>Keep your hub access token private.</b> This app only sends
             lighting commands to the bulbs you explicitly approve. This helps
             prevent accidentally changing other residents’ lights.</p>
@@ -1273,7 +1272,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "dirigera.ico")))
+    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "lysnav.ico")))
     if sys.argv[1:] == ["--check-runtime"]:
         # Exercise the frozen Qt platform and icon loading without opening a
         # window, installing the tray hook, or connecting to a hub.
@@ -1283,7 +1282,7 @@ def main():
             sys.exit(1)
         return
 
-    app.setApplicationName("dirigera-windows")
+    app.setApplicationName("Lysnav")
     app.setApplicationDisplayName(APP_NAME)
     app.setQuitOnLastWindowClosed(False)
     start_requested = "--tray" in sys.argv
@@ -1295,7 +1294,7 @@ def main():
         return
 
     # A Start menu launch should open the window of the existing tray process.
-    server_name = "DIRIGERA-" + sha256(str(settings_dir).casefold().encode("utf-8")).hexdigest()[:24]
+    server_name = "Lysnav-" + sha256(str(settings_dir).casefold().encode("utf-8")).hexdigest()[:24]
     instance = QLockFile(str(settings_dir / "instance.lock"))
     instance.setStaleLockTime(0)
     if not instance.tryLock(0):
@@ -1305,7 +1304,7 @@ def main():
             client = QLocalSocket()
             client.connectToServer(server_name)
             if not client.waitForConnected(1500):
-                QMessageBox.information(None, APP_NAME, "DIRIGERA is already running. Open it from the system tray.")
+                QMessageBox.information(None, APP_NAME, "Lysnav is already running. Open it from the system tray.")
         return
 
     QLocalServer.removeServer(server_name)

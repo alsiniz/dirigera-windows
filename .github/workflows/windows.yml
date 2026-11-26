@@ -32,11 +32,11 @@ jobs:
           ./packaging/test_installer.ps1 -Installer $installer.FullName
       - uses: actions/upload-artifact@v4
         with:
-          name: dirigera-windows-x64-installer
+          name: lysnav-windows-x64-installer
           path: release/*-Setup.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: dirigera-windows-x64-portable-exe
+          name: lysnav-windows-x64-portable-exe
           path: release/portable-exe/
           if-no-files-found: error

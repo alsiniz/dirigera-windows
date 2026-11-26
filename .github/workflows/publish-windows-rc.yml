@@ -47,13 +47,13 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.build_run_id }}
-          pattern: dirigera-windows-x64-*
+          pattern: lysnav-windows-x64-*
           merge-multiple: true
           path: artifacts
       - name: Upload executables and publish prerelease
         shell: bash
         run: |
-          prefix="artifacts/DIRIGERA-Windows-${RELEASE_TAG#v}-x64"
+          prefix="artifacts/Lysnav-Windows-${RELEASE_TAG#v}-x64"
           test -s "$prefix-Portable.exe"
           test -s "$prefix-Setup.exe"
           gh release upload "$RELEASE_TAG" "$prefix-Portable.exe" "$prefix-Setup.exe" \
