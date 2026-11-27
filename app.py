@@ -16,7 +16,7 @@ from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
 from PySide6.QtCore import QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile
-from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
+from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, QFileDialog,
@@ -1538,6 +1538,8 @@ def main():
                          "tray-light-on.svg", "tray-dark-on.svg"):
             if QIcon(str(ASSETS / filename)).pixmap(32, 32).isNull():
                 sys.exit(1)
+        if b"ico" not in [bytes(fmt).lower() for fmt in QImageReader.supportedImageFormats()]:
+            sys.exit(1)
         if not callable(auth.main):
             sys.exit(1)
         return

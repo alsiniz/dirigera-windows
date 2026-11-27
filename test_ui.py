@@ -272,6 +272,49 @@ class RefreshLifetimeTests(unittest.TestCase):
             self.assertEqual(shade(), "#ebdbb2")
             self.assertEqual(app_shade(), "#fe8019")
 
+    def test_saved_custom_icon_stays_static_and_reset_restores_live_indicator(self):
+        window = self.window
+        with TemporaryDirectory() as folder, \
+                patch("app.panel_icon_filename", side_effect=lambda active=False:
+                      "tray-dark-on.svg" if active else "tray-dark.svg"):
+            path = Path(folder) / "custom.ico"
+            write_test_ico(path)
+
+            def choose_icon_and_dismiss(result):
+                dialog = self.app.activeModalWidget()
+                dialog.icon_name = str(path)
+                dialog.done(result)
+
+            with patch("app.write_config") as write:
+                QTimer.singleShot(0, lambda: choose_icon_and_dismiss(QDialog.DialogCode.Rejected))
+                window.change_tray_settings()
+                write.assert_not_called()
+                self.assertFalse(window.config.get("tray_icon_path"))
+                QTimer.singleShot(0, lambda: choose_icon_and_dismiss(QDialog.DialogCode.Accepted))
+                window.change_tray_settings()
+                self.assertEqual(window.config["tray_icon_path"], str(path))
+                write.assert_called_once()
+
+            for active in (False, True):
+                window.on_loaded(([replace(self.light, on=active)], [], ""))
+                self.assertEqual(window.tray.icon().pixmap(32, 32).toImage()
+                                 .pixelColor(16, 16).name(), "#176a95")
+                self.assertEqual(window.windowIcon().pixmap(64, 64).toImage()
+                                 .pixelColor(32, 20).name(), "#fe8019")
+
+            def restore_and_save():
+                dialog = self.app.activeModalWidget()
+                dialog.restore_default_icon()
+                dialog.accept()
+
+            with patch("app.write_config") as write:
+                QTimer.singleShot(0, restore_and_save)
+                window.change_tray_settings()
+                self.assertEqual(window.config["tray_icon_path"], "")
+                write.assert_called_once()
+            self.assertEqual(window.tray.icon().pixmap(64, 64).toImage()
+                             .pixelColor(32, 25).name(), "#fe8019")
+
     def test_repeated_refresh_disposes_old_pages_and_reuses_menu(self):
         window = self.window
         welcome = window.tabs.widget(0)
