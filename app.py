@@ -15,9 +15,10 @@ from version import APP_NAME, VERSION, KOFI_URL
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
+from PySide6.QtCore import QByteArray, QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
 from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, QFileDialog, QLayout,
     QLabel, QPushButton, QLineEdit, QDialog, QDialogButtonBox, QTreeWidget,
@@ -54,6 +55,18 @@ def custom_tray_qicon(filename):
         return icon
     except (OSError, ValueError):
         return QIcon()
+
+
+def native_tray_icon(filename):
+    """Render bounded size variants before handing the icon to Windows Shell."""
+    source = QIcon(str(ASSETS / filename))
+    icon = QIcon()
+    for size in (16, 20, 24, 32, 40, 48, 64):
+        pixmap = source.pixmap(size, size)
+        if pixmap.isNull():
+            raise RuntimeError(f"Cannot render tray icon: {filename}")
+        icon.addPixmap(pixmap)
+    return icon
 
 
 def panel_icon_filename(active=False):
@@ -259,6 +272,71 @@ class WheelDialog(QDialog):
         super().closeEvent(event)
 
 
+def section_heading(text):
+    label = QLabel(text)
+    font = label.font()
+    font.setBold(True)
+    if font.pointSize() > 0:
+        font.setPointSize(font.pointSize() + 1)
+    label.setFont(font)
+    return label
+
+
+def wrapped_label(text):
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setTextFormat(Qt.TextFormat.PlainText)
+    return label
+
+
+def section_divider():
+    line = QFrame()
+    line.setFrameShape(QFrame.Shape.HLine)
+    line.setFrameShadow(QFrame.Shadow.Sunken)
+    return line
+
+
+def hub_action_svg(palette):
+    """Approved B.4 vector: palette-aware line art and a fixed orange action cue."""
+    ink = palette.windowText().color().name()
+    background = palette.window().color().name()
+    muted = QColor(ink)
+    base = QColor(background)
+    muted.setRgb(*(round(a * .48 + b * .52)
+                   for a, b in zip(muted.getRgb()[:3], base.getRgb()[:3])))
+    secondary = muted.name()
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 10 270 245">
+      <g stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="190" cy="119" r="99" fill="none" stroke="{ink}" stroke-width="2"/>
+        <circle cx="190" cy="119" r="84" fill="none" stroke="{secondary}" stroke-width="1.5"/>
+        <path d="M182 36h16v10a12 12 0 1 1-16 0Z" fill="{background}" stroke="{secondary}" stroke-width="1.5"/>
+        <path d="M177 202v16h26v-16" fill="{background}" stroke="{secondary}" stroke-width="1.5"/>
+        <circle cx="255" cy="119" r="2.8" fill="{secondary}"/>
+        <circle cx="125" cy="119" r="12" fill="#FE8019" fill-opacity=".18" stroke="#FE8019" stroke-width="2.5"/>
+        <circle cx="125" cy="119" r="21" fill="none" stroke="#FE8019" stroke-width="1.5" stroke-dasharray="4 5"/>
+        <g transform="translate(125 119) rotate(35)">
+          <path d="M-12 112V94L-27 69Q-33 59-25 54Q-19 50-13 58L-7 67V8Q-7-2 2-2Q11-2 11 8V42Q18 35 25 39Q31 42 31 48Q38 43 44 47Q50 51 50 57Q56 53 62 58Q67 63 67 74V91Q67 103 57 112Z" fill="{background}" stroke="{ink}" stroke-width="2.4"/>
+          <path d="M11 42v19M31 48v15M50 57v12" fill="none" stroke="{ink}" stroke-width="1.6"/>
+        </g>
+        <path d="M125 89v-8M146.2 97.8l6-6M155 119h8" stroke="#FE8019" stroke-width="2.5" fill="none"/>
+      </g>
+    </svg>'''.encode("utf-8")
+
+
+class HubActionIllustration(QWidget):
+    """Render the vector at the device's actual scale, not as a baked image."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(156, 142)
+        self.setAccessibleName("Illustration: press the larger action button under the hub, not the reset pinhole")
+
+    def paintEvent(self, event):
+        renderer = QSvgRenderer(QByteArray(hub_action_svg(self.palette())))
+        painter = QPainter(self)
+        renderer.render(painter)
+        painter.end()
+
+
 class TokenPairingDialog(QDialog):
     """GUI front end to the upstream generate-token pairing handshake.
 
@@ -269,25 +347,53 @@ class TokenPairingDialog(QDialog):
     def __init__(self, parent, ip: str):
         super().__init__(parent)
         self.setWindowTitle("Generate DIRIGERA access token")
-        self.setMinimumSize(540, 240)
-        self.resize(640, 285)
+        self.setMinimumWidth(540)
+        self.resize(640, 420)
         self.generated_token = None
         self.ip = ip
         self._output = bytearray()
         self._retry = False
+        self._closing = False
 
         layout = QVBoxLayout(self)
-        instructions = QLabel(
-            "1. The app will start a pairing request with your DIRIGERA hub.\n"
-            "2. Press the physical action button underneath the hub.\n"
-            "3. Click Continue here to complete pairing."
-        )
-        instructions.setWordWrap(True)
-        layout.addWidget(instructions)
-        self.status = QLabel("Starting the local pairing request…")
-        self.status.setWordWrap(True)
-        layout.addWidget(self.status)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        layout.addWidget(section_heading("Pair with your hub"))
+        layout.addWidget(wrapped_label("Generate a new access token for Lysnav to communicate with your DIRIGERA hub locally."))
+
+        status_frame = QFrame()
+        status_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        status_layout = QHBoxLayout(status_frame)
+        status_layout.setContentsMargins(12, 12, 12, 12)
+        status_layout.setSpacing(10)
+        self.status_icon = QLabel()
+        status_layout.addWidget(self.status_icon, alignment=Qt.AlignmentFlag.AlignTop)
+        status_text = QVBoxLayout()
+        status_text.setSpacing(4)
+        self.status_title = section_heading("Preparing pairing…")
+        self.status = wrapped_label("Lysnav is starting the local pairing request.")
+        status_text.addWidget(self.status_title)
+        status_text.addWidget(self.status)
+        status_layout.addLayout(status_text, 1)
+        layout.addWidget(status_frame)
+        layout.addWidget(section_heading("What you need to do"))
+        instructions = QHBoxLayout()
+        instructions.setSpacing(16)
+        self.hub_illustration = HubActionIllustration()
+        instructions.addWidget(self.hub_illustration, alignment=Qt.AlignmentFlag.AlignVCenter)
+        steps = QVBoxLayout()
+        steps.setSpacing(12)
+        for text in ("<b>1. Press the action button</b> on the underside of your DIRIGERA hub.",
+                     "<b>2. Click Continue</b> below to complete pairing."):
+            label = QLabel(text)
+            label.setWordWrap(True)
+            steps.addWidget(label)
+        instructions.addLayout(steps, 1)
+        layout.addLayout(instructions)
+        layout.addWidget(wrapped_label("Your access token is stored locally when you save your hub settings. Keep it private."))
         layout.addStretch()
+        layout.addWidget(section_divider())
         row = QHBoxLayout()
         self.continue_button = QPushButton("Continue")
         self.continue_button.setEnabled(False)
@@ -298,6 +404,7 @@ class TokenPairingDialog(QDialog):
         row.addWidget(self.continue_button)
         row.addWidget(cancel)
         layout.addLayout(row)
+        self._set_status("Preparing pairing…", "Lysnav is starting the local pairing request.")
 
         self.process = QProcess(self)
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
@@ -306,14 +413,25 @@ class TokenPairingDialog(QDialog):
         self.process.readyReadStandardError.connect(self._discard_error_output)
         self.process.finished.connect(self._finished)
         self.process.errorOccurred.connect(self._process_error)
-        QTimer.singleShot(0, self._start)
+        self._start_timer = QTimer(self)
+        self._start_timer.setSingleShot(True)
+        self._start_timer.timeout.connect(self._start)
+        self._start_timer.start(0)
+
+    def _set_status(self, title, message, failed=False):
+        self.status_title.setText(title)
+        self.status.setText(message)
+        symbol = QStyle.StandardPixmap.SP_MessageBoxWarning if failed else QStyle.StandardPixmap.SP_MessageBoxInformation
+        self.status_icon.setPixmap(self.style().standardIcon(symbol).pixmap(24, 24))
 
     def _start(self):
+        if self._closing:
+            return
         self._retry = False
         self._output.clear()
         self.continue_button.setText("Continue")
         self.continue_button.setEnabled(False)
-        self.status.setText("Starting the local pairing request…")
+        self._set_status("Preparing pairing…", "Lysnav is starting the local pairing request.")
         # Launch the same app in helper mode, rather than assuming a shell or
         # an installed generate-token executable exists. Works with bundled apps.
         args = ["--token-helper", self.ip]
@@ -326,10 +444,9 @@ class TokenPairingDialog(QDialog):
         self.process.start(executable, args)
 
     def _started(self):
-        self.status.setText(
-            "Pairing request started. Press the action button underneath DIRIGERA, "
-            "then click Continue."
-        )
+        if self._closing:
+            return
+        self._set_status("Pairing helper started", "Follow the two instructions below.")
         self.continue_button.setEnabled(True)
 
     def _read_output(self):
@@ -348,11 +465,14 @@ class TokenPairingDialog(QDialog):
         if self.process.state() != QProcess.ProcessState.Running:
             return
         self.continue_button.setEnabled(False)
-        self.status.setText("Completing pairing with DIRIGERA…")
+        self._set_status("Completing pairing…", "Waiting for your DIRIGERA hub to respond.")
         self.process.write(b"\n")
 
     def _finished(self, exit_code, exit_status):
         self._read_output()
+        if self._closing:
+            self._output.clear()
+            return
         token = extract_generated_token(self._output.decode("utf-8", errors="replace"))
         self._output.clear()
         if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit and token:
@@ -362,97 +482,167 @@ class TokenPairingDialog(QDialog):
         self._show_failure("Pairing was not completed. Check the hub address, press the action button, and try again.")
 
     def _process_error(self, error):
-        if error == QProcess.ProcessError.FailedToStart:
+        if not self._closing and error == QProcess.ProcessError.FailedToStart:
             self._show_failure("Unable to start the pairing helper. Please reinstall the app or report this error.")
 
     def _show_failure(self, message):
-        self.status.setText(message)
+        self._set_status("Pairing unsuccessful", message, failed=True)
         self._retry = True
         self.continue_button.setText("Try again")
         self.continue_button.setEnabled(True)
 
-    def reject(self):
+    def _cancel_helper(self):
+        self._closing = True
+        self._start_timer.stop()
         if self.process.state() != QProcess.ProcessState.NotRunning:
             self.process.kill()
+            self.process.waitForFinished(1000)
         self._output.clear()
+
+    def reject(self):
+        self._cancel_helper()
         super().reject()
 
     def closeEvent(self, event):
-        if self.process.state() != QProcess.ProcessState.NotRunning:
-            self.process.kill()
-        self._output.clear()
+        self._cancel_helper()
         super().closeEvent(event)
 
 
 class ConnectionDialog(QDialog):
     def __init__(self, parent, config):
         super().__init__(parent)
-        self.setWindowTitle("Connect to IKEA DIRIGERA")
+        self.setWindowTitle("Hub settings")
         self.setMinimumSize(620, 335)
-        self.resize(720, 390)
+        self.resize(720, 455)
         outer = QVBoxLayout(self)
-        note = QLabel(
-            "Enter the local IP address or hostname of your DIRIGERA hub. "
-            "You can generate a new access token here without opening a terminal."
-        )
-        note.setWordWrap(True)
-        outer.addWidget(note)
-        form = QFormLayout()
+        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setSpacing(12)
+        outer.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        outer.addWidget(section_heading("Hub connection"))
+        outer.addWidget(wrapped_label("Connect Lysnav to your local IKEA DIRIGERA hub."))
+        address_label = QLabel("Hub address")
         self.ip = QLineEdit(config.get("ip", ""))
         self.ip.setPlaceholderText("192.168.1.20")
+        address_label.setBuddy(self.ip)
+        outer.addWidget(address_label)
+        outer.addWidget(self.ip)
+        self.address_help = wrapped_label("")
+        outer.addWidget(self.address_help)
+        self.ip.textChanged.connect(self.reset_address_help)
+        self.reset_address_help()
+        outer.addWidget(section_divider())
+
+        token_label = section_heading("Access token")
         self.token = QLineEdit(config.get("token", ""))
         self.token.setEchoMode(QLineEdit.EchoMode.Password)
         self.token.setPlaceholderText("Access token")
-        self.generate_button = QPushButton("Generate token")
+        token_label.setBuddy(self.token)
+        outer.addWidget(token_label)
+        token_row = QHBoxLayout()
+        token_row.setSpacing(8)
+        token_row.addWidget(self.token, 1)
+        self.show_token_button = QPushButton("Show")
+        self.show_token_button.setCheckable(True)
+        self.show_token_button.setAutoDefault(False)
+        self.show_token_button.setAccessibleName("Show access token")
+        self.show_token_button.toggled.connect(self.set_token_visible)
+        token_row.addWidget(self.show_token_button)
+        self.copy_token_button = QPushButton("Copy")
+        self.copy_token_button.setAutoDefault(False)
+        self.copy_token_button.setToolTip("Copy the full access token to the clipboard")
+        self.copy_token_button.setAccessibleName("Copy access token")
+        self.copy_token_button.clicked.connect(self.copy_token)
+        token_row.addWidget(self.copy_token_button)
+        outer.addLayout(token_row)
+        self.token_help = wrapped_label("Keep your access token private. It is saved locally when you click Save.")
+        outer.addWidget(self.token_help)
+        self.token.textChanged.connect(self.update_token_controls)
+        self.update_token_controls()
+
+        generate_row = QHBoxLayout()
+        generate_row.setSpacing(12)
+        self.generate_button = QPushButton("Generate token…")
+        self.generate_button.setAutoDefault(False)
         self.generate_button.setToolTip("Pair locally with DIRIGERA using its physical action button")
         self.generate_button.clicked.connect(self.generate_token)
-        token_row = QWidget(self)
-        token_layout = QHBoxLayout(token_row)
-        token_layout.setContentsMargins(0, 0, 0, 0)
-        token_layout.addWidget(self.token, 1)
-        token_layout.addWidget(self.generate_button)
-        form.addRow("Hub address", self.ip)
-        form.addRow("Access token", token_row)
-        outer.addLayout(form)
-        self.address_help = QLabel()
-        self.address_help.setWordWrap(True)
-        outer.addWidget(self.address_help)
-        self.ip.textEdited.connect(self.reset_address_help)
-        self.reset_address_help()
-        ip_note = QLabel(
-            "<b>Recommended: reserve an IP address for DIRIGERA.</b> "
-            "Set a DHCP reservation in your router so the hub keeps the same local IP address. "
-            "This helps Lysnav reconnect reliably. See your router's manual "
-            "for instructions on configuring DHCP reservations."
-        )
-        ip_note.setWordWrap(True)
-        outer.addWidget(ip_note)
+        generate_row.addWidget(self.generate_button)
+        generate_row.addWidget(wrapped_label("Pair with your hub to obtain a new access token."), 1)
+        outer.addLayout(generate_row)
+        # Reserve native font-aware sizes in the independent button rows.
+        for button in (self.show_token_button, self.copy_token_button, self.generate_button):
+            button.setMinimumHeight(max(32, button.sizeHint().height(), button.fontMetrics().height() + 12))
+        self.ip.setMinimumHeight(max(32, self.ip.sizeHint().height()))
+        self.token.setMinimumHeight(max(32, self.token.sizeHint().height(),
+                                        self.show_token_button.minimumHeight(),
+                                        self.copy_token_button.minimumHeight()))
+        # Keep the Windows button actionable to show address guidance.
+
+        note = QFrame()
+        note.setFrameShape(QFrame.Shape.StyledPanel)
+        note_layout = QHBoxLayout(note)
+        note_layout.setContentsMargins(12, 12, 12, 12)
+        note_layout.setSpacing(10)
+        info = QLabel()
+        info.setPixmap(self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation).pixmap(20, 20))
+        note_layout.addWidget(info, alignment=Qt.AlignmentFlag.AlignTop)
+        note_text = QVBoxLayout()
+        note_text.setSpacing(6)
+        note_text.addWidget(section_heading("Recommended: assign a static IP address to your DIRIGERA"))
+        self.ip_note = wrapped_label(
+            "Configure a DHCP reservation (also known as a fixed IP assignment) in your router "
+            "so DIRIGERA always receives the same local IP address. This helps Lysnav reconnect "
+            "reliably after restarts. Refer to your router's manual for instructions.")
+        note_text.addWidget(self.ip_note)
+        note_layout.addLayout(note_text, 1)
+        outer.addWidget(note)
         outer.addStretch()
+        outer.addWidget(section_divider())
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.check_accept)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
 
     def reset_address_help(self, *_):
-        self.address_help.setText(
-            "Find the hub's local IP address in your router's connected-device list."
-        )
+        self.address_help.setText("Find the hub's local IP address in your router's connected-device list.")
+
+    def update_token_controls(self, *_):
+        has_token = bool(self.token.text().strip())
+        self.copy_token_button.setEnabled(has_token)
+        self.show_token_button.setEnabled(has_token)
+        if not has_token:
+            self.show_token_button.setChecked(False)
+        self.token_help.setText("Keep your access token private. It is saved locally when you click Save.")
+
+    def set_token_visible(self, visible):
+        self.token.setEchoMode(QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password)
+        self.show_token_button.setText("Hide" if visible else "Show")
+        self.show_token_button.setAccessibleName("Hide access token" if visible else "Show access token")
+
+    def copy_token(self):
+        token = self.token.text().strip()
+        if token:
+            QApplication.clipboard().setText(token)
+            self.token_help.setText("Access token copied. Keep it private; other apps may access the clipboard.")
 
     def generate_token(self):
         ip = self.ip.text().strip()
         if not valid_hub_address(ip):
             self.address_help.setText(
                 "Enter the hub's local IP address or hostname first, such as 192.168.1.20. "
-                "Use the address by itself."
-            )
+                "Use the address by itself.")
             self.ip.setFocus()
             self.ip.selectAll()
             return
         pairing = TokenPairingDialog(self, ip)
-        if pairing.exec() == QDialog.DialogCode.Accepted and pairing.generated_token:
-            self.token.setText(pairing.generated_token)
-            self.token.setFocus()
-            # User must still choose Save before credentials are persisted.
+        try:
+            if pairing.exec() == QDialog.DialogCode.Accepted and pairing.generated_token:
+                self.show_token_button.setChecked(False)
+                self.token.setEchoMode(QLineEdit.EchoMode.Password)
+                self.token.setText(pairing.generated_token)
+                self.token_help.setText("New access token received. Click Save to apply it.")
+                self.token.setFocus()
+        finally:
+            pairing.deleteLater()
 
     def check_accept(self):
         ip = self.ip.text().strip()
@@ -918,7 +1108,7 @@ class MainWindow(QMainWindow):
         active = any(l.on for l in approved_visible(self.lights, self.config["approved"]))
         filename = panel_icon_filename(active)
         if filename not in self._panel_icon_cache:
-            self._panel_icon_cache[filename] = QIcon(str(ASSETS / filename))
+            self._panel_icon_cache[filename] = native_tray_icon(filename)
         return filename, self._panel_icon_cache[filename]
 
     def _sync_panel_icon(self):
@@ -934,8 +1124,8 @@ class MainWindow(QMainWindow):
             filename, icon = self._default_panel_qicon()
             key = ("default", filename)
         if key != self._panel_icon_name:
-            self._panel_icon_name = key
             self.tray.setIcon(icon)
+            self._panel_icon_name = key
 
     def nativeEvent(self, event_type, message):
         if sys.platform == "win32" and hasattr(self, "_panel_icon_name"):
@@ -1118,9 +1308,17 @@ class MainWindow(QMainWindow):
         bulbs = tray_power_targets(self.lights, self.config["approved"], self.config.get("tray_room", ""))
         eligible = tray_targets(self.lights, self.config["approved"], self.config.get("tray_room", ""))
         registration = "Installed" if self.tray_wheel.installed else "Unavailable"
+        approved = approved_visible(self.lights, self.config["approved"])
+        active_count = sum(bool(light.on) for light in approved)
+        mode, variant = self._panel_icon_name or ("unknown", "")
+        variant = "Custom ICO" if mode == "custom" else variant
         message = (
             f"System tray available: {QSystemTrayIcon.isSystemTrayAvailable()}\n"
             f"Icon visible by the clock: {self.tray.geometry().isValid()}\n"
+            f"Tray icon mode: {mode}\n"
+            f"Selected icon: {variant}\n"
+            f"Approved lights on (all rooms): {active_count}/{len(approved)}\n"
+            f"Light status: {'Unverified / last known' if self._tray_state_stale else 'Current snapshot'}\n"
             f"Wheel hook: {registration}\n"
             f"Wheel events over the icon: {self.tray_wheel.count}\n"
             f"Last wheel delta: {self._tray_last_wheel}\n"
@@ -1216,8 +1414,13 @@ class MainWindow(QMainWindow):
 
     def change_connection(self):
         dialog = ConnectionDialog(self, self.config)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            new_ip = dialog.ip.text().strip()
+            new_token = dialog.token.text().strip()
+        finally:
+            dialog.deleteLater()
         old = self.worker
         if old:
             # Avoid leaving a system hook installed while the GUI thread waits.
@@ -1234,9 +1437,8 @@ class MainWindow(QMainWindow):
         self.worker = None
         self._slider_wheel_timer.stop()
         self._slider_wheel_pending.clear()
-        new_ip = dialog.ip.text().strip()
         same_hub = new_ip == self.config.get("ip", "")
-        self.config = {"ip": new_ip, "token": dialog.token.text().strip(),
+        self.config = {"ip": new_ip, "token": new_token,
                        "approved": dict(self.config["approved"]) if same_hub else {},
                        "approved_sensors": dict(self.config["approved_sensors"]) if same_hub else {},
                        "tray_room": self.config.get("tray_room", "") if same_hub else "",
@@ -1561,6 +1763,15 @@ def main():
                          "tray-light-on.svg", "tray-dark-on.svg"):
             if QIcon(str(ASSETS / filename)).pixmap(32, 32).isNull():
                 sys.exit(1)
+        # Verify actual rendered notification icons, not just non-null SVGs.
+        for mode, base in (("light", "#282828"), ("dark", "#ebdbb2")):
+            for active in (False, True):
+                name = f"tray-{mode}{'-on' if active else ''}.svg"
+                icon = native_tray_icon(name)
+                for size in (16, 32, 64):
+                    image = icon.pixmap(size, size).toImage()
+                    if image.pixelColor(size // 2, size * 25 // 64).name() != ("#fe8019" if active else base):
+                        sys.exit(1)
         if b"ico" not in [bytes(fmt).lower() for fmt in QImageReader.supportedImageFormats()]:
             sys.exit(1)
         if not callable(auth.main):

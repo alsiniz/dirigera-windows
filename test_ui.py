@@ -12,12 +12,12 @@ from unittest.mock import MagicMock, patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PySide6.QtCore import QObject, Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer
+    from PySide6.QtCore import QObject, Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer, QProcess
     from PySide6.QtTest import QTest
     from PySide6.QtGui import QWheelEvent, QIcon
-    from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox
+    from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox, QLineEdit
     from shiboken6 import isValid
-    from app import custom_tray_qicon, panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
+    from app import custom_tray_qicon, native_tray_icon, panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, TokenPairingDialog, hub_action_svg, MainWindow
     from core import EnvironmentInfo, LightInfo
 except ImportError:
     if os.environ.get('LYSNAV_REQUIRE_QT_TESTS') == '1':
@@ -106,6 +106,18 @@ class PanelIconTests(unittest.TestCase):
             write_test_ico(renamed)
             self.assertTrue(custom_tray_qicon(str(renamed)).isNull())
             self.assertTrue(custom_tray_qicon("relative.ico").isNull())
+
+    def test_native_tray_pixmaps_preserve_state_at_shell_sizes(self):
+        for mode, base in (("light", "#282828"), ("dark", "#ebdbb2")):
+            for active in (False, True):
+                name = f"tray-{mode}{'-on' if active else ''}.svg"
+                icon = native_tray_icon(name)
+                for size in (16, 20, 24, 32, 40, 48, 64):
+                    with self.subTest(mode=mode, active=active, size=size):
+                        image = icon.pixmap(size, size).toImage()
+                        self.assertEqual(image.pixelColor(size // 2, size * 25 // 64).name(),
+                                         "#fe8019" if active else base)
+                        self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
 
     def test_taskbar_uses_system_colour_setting(self):
         registry = MagicMock()
@@ -292,6 +304,55 @@ class ConnectionDialogTests(unittest.TestCase):
             dialog.generate_button.click()
             pairing.assert_called_once_with(dialog, '192.168.1.20')
         dialog.close()
+
+    def test_access_token_visibility_copy_and_new_token_masking(self):
+        token = "test-token-only-" + "a" * 40
+        dialog = ConnectionDialog(None, {"ip": "192.168.1.20", "token": token})
+        self.addCleanup(dialog.deleteLater)
+        self.assertEqual(dialog.token.echoMode(), QLineEdit.EchoMode.Password)
+        self.assertTrue(dialog.copy_token_button.isEnabled())
+        with patch("app.QApplication.clipboard") as clipboard:
+            dialog.copy_token_button.click()
+            clipboard.return_value.setText.assert_called_once_with(token)
+        self.assertEqual(dialog.token.echoMode(), QLineEdit.EchoMode.Password)
+        dialog.show_token_button.click()
+        self.assertEqual(dialog.token.echoMode(), QLineEdit.EchoMode.Normal)
+        self.assertEqual(dialog.show_token_button.text(), "Hide")
+        dialog.show_token_button.click()
+        self.assertEqual(dialog.token.echoMode(), QLineEdit.EchoMode.Password)
+        dialog.show_token_button.click()
+        with patch("app.TokenPairingDialog") as pairing:
+            pairing.return_value.exec.return_value = QDialog.DialogCode.Accepted
+            pairing.return_value.generated_token = "new-test-token-" + "b" * 40
+            dialog.generate_button.click()
+            pairing.return_value.deleteLater.assert_called_once()
+        self.assertEqual(dialog.token.echoMode(), QLineEdit.EchoMode.Password)
+        self.assertFalse(dialog.show_token_button.isChecked())
+        self.assertTrue(dialog.token.text().startswith("new-test-token-"))
+        self.assertIn("DHCP reservation", dialog.ip_note.text())
+        dialog.token.clear()
+        self.assertFalse(dialog.copy_token_button.isEnabled())
+        self.assertFalse(dialog.show_token_button.isEnabled())
+        dialog.reject()
+
+    def test_pairing_dialog_has_two_user_steps_and_private_status(self):
+        dialog = TokenPairingDialog(None, "192.168.1.20")
+        self.addCleanup(dialog.deleteLater)
+        dialog._start_timer.stop()
+        self.assertFalse(dialog.continue_button.isEnabled())
+        self.assertIn("Preparing", dialog.status_title.text())
+        dialog._started()
+        self.assertTrue(dialog.continue_button.isEnabled())
+        self.assertIn("helper started", dialog.status_title.text())
+        self.assertIn(b"#FE8019", hub_action_svg(dialog.palette()))
+        self.assertTrue(dialog.hub_illustration.grab().size().width() >= 156)
+        dialog._show_failure("Pairing was not completed.")
+        self.assertEqual(dialog.continue_button.text(), "Try again")
+        self.assertTrue(dialog.continue_button.isEnabled())
+        dialog._output.extend(b"private-test-output")
+        dialog.reject()
+        self.assertFalse(dialog._output)
+        self.assertFalse(dialog._start_timer.isActive())
 
     def test_dialog_has_minimum_size_for_dhcp_note(self):
         dialog = ConnectionDialog(None, {})

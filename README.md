@@ -164,3 +164,9 @@ The notification-area lamp follows the Windows system colour mode, including whe
 ## Lysnav editions
 
 The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the logo and panel icons](docs/branding/README.md).
+
+### Hub credentials and pairing
+
+In **Hub settings**, the token is masked by default. **Show** reveals it, **Hide** masks it again, and **Copy** copies it without revealing it. Keep the token and clipboard contents private. **Generate token…** starts the local pairing helper; press the action button on the underside of DIRIGERA (not the reset pinhole), then click Continue. A newly received token remains masked and is only persisted on Save. Assign a static local IP through a DHCP reservation on your router for reliable reconnection.
+
+If the notification-area icon does not change, check that **Restore default dynamic icon** is selected and inspect **Tray settings → Input diagnostics** for the selected icon variant and count of approved lights on. The pinned taskbar application icon is intentionally static.

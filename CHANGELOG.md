@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Redesigned Hub settings and token pairing with token reveal/copy controls, a two-action pairing guide, palette-adaptive vector illustration, and static IP/DHCP reservation guidance.\n- Render native tray icon pixmaps at common Windows shell sizes; validate packaged icon colours and show approved-light power and icon variant in tray diagnostics.
 - Separated tray appearance controls and disclaimer into independent layout rows with reserved vertical clearance, including at the dialog's minimum size.
 - Prevented vertically compressed tray appearance buttons with a shared minimum height that accounts for native font and style metrics.
 - Redesigned Tray settings into separate room, tray appearance and mouse-control sections with native styling, an icon preview and aligned mouse illustrations.
