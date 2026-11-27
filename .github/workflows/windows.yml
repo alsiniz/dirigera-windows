@@ -2,14 +2,22 @@ name: Windows builds
 
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Push builds cover branches in this repository. Fork PRs need their own run.
+# Keep PR concurrency separate so a skipped same-repository PR cannot cancel a push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -19,6 +27,11 @@ jobs:
           python-version: '3.12'
           architecture: x64
       - run: python -m pip install -r requirements-build.txt
+      - name: Verify Qt test imports
+        run: python -c "import app; import test_ui; assert test_ui.ClickToJumpSlider is not None, 'Qt tests would be skipped'"
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LYSNAV_REQUIRE_QT_TESTS: '1'
       - run: python -m unittest discover -v
         env:
           QT_QPA_PLATFORM: offscreen
