@@ -1,6 +1,8 @@
 """Qt slider regression test. Run with QT_QPA_PLATFORM=offscreen on CI."""
 from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from struct import pack
 import os
 import unittest
 from unittest.mock import MagicMock, patch
@@ -10,12 +12,24 @@ try:
     from PySide6.QtCore import Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer
     from PySide6.QtTest import QTest
     from PySide6.QtGui import QWheelEvent, QIcon
-    from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea
+    from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox
     from shiboken6 import isValid
-    from app import panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
+    from app import custom_tray_qicon, panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
     from core import EnvironmentInfo, LightInfo
 except ImportError:
     ClickToJumpSlider = None
+
+
+def write_test_ico(path):
+    # A 32px BGRA DIB with an opaque green fill and an empty AND mask.
+    size = 32
+    pixels = bytes((0x95, 0x6a, 0x17, 0xff)) * (size * size)
+    mask = bytes(4 * size)
+    dib = pack("<IiiHHIIiiII", 40, size, size * 2, 1, 32, 0,
+               len(pixels), 0, 0, 0, 0) + pixels + mask
+    path.write_bytes(pack("<HHH", 0, 1, 1)
+                     + pack("<BBBBHHII", size, size, 0, 0, 1, 32, len(dib), 22)
+                     + dib)
 
 
 @unittest.skipUnless(ClickToJumpSlider is not None, 'PySide6 not installed')
@@ -39,6 +53,23 @@ class PanelIconTests(unittest.TestCase):
                     self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
         self.assertEqual((assets / "lysnav.svg").read_bytes(),
                          (assets / "lysnav-logo.svg").read_bytes())
+
+    def test_only_real_ico_files_are_loaded_and_cached_independently(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "Custom.ICO"
+            write_test_ico(path)
+            icon = custom_tray_qicon(str(path))
+            self.assertFalse(icon.isNull())
+            self.assertEqual(icon.pixmap(32, 32).toImage().pixelColor(16, 16).name(), "#176a95")
+            path.unlink()
+            self.assertTrue(custom_tray_qicon(str(path)).isNull())
+            self.assertEqual(icon.pixmap(32, 32).toImage().pixelColor(16, 16).name(), "#176a95")
+            path.write_bytes(b"not an ico")
+            self.assertTrue(custom_tray_qicon(str(path)).isNull())
+            renamed = Path(folder) / "renamed.png"
+            write_test_ico(renamed)
+            self.assertTrue(custom_tray_qicon(str(renamed)).isNull())
+            self.assertTrue(custom_tray_qicon("relative.ico").isNull())
 
     def test_taskbar_uses_system_colour_setting(self):
         registry = MagicMock()
@@ -93,6 +124,55 @@ class TraySettingsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_native_ico_picker_preview_reset_and_cancel(self):
+        parent = QWidget()
+        self.addCleanup(parent.deleteLater)
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "custom.ico"
+            write_test_ico(path)
+            default = QIcon(str(Path(__file__).parent / "assets" / "tray-dark-on.svg"))
+            dialog = TraySettingsDialog(parent, "r1", {"r1": "Room"}, default_icon=lambda: default)
+            self.addCleanup(dialog.deleteLater)
+            self.assertFalse(dialog.restore_button.isEnabled())
+            with patch("app.QFileDialog.getOpenFileName", return_value=(str(path), "")) as picker:
+                dialog.browse_button.click()
+                self.assertIn("*.ico", picker.call_args.args[-1])
+            self.assertEqual(dialog.icon_name, str(path))
+            self.assertEqual(dialog.icon_label.text(), "custom.ico")
+            self.assertEqual(dialog.icon_status.text(), "Dynamic lighting status disabled")
+            self.assertTrue(dialog.restore_button.isEnabled())
+            self.assertEqual(dialog.icon_preview.pixmap().toImage().pixelColor(16, 16).name(), "#176a95")
+            with patch("app.QFileDialog.getOpenFileName", return_value=("", "")):
+                dialog.browse_button.click()
+            self.assertEqual(dialog.icon_name, str(path))
+            invalid = Path(folder) / "invalid.ico"
+            invalid.write_text("invalid icon")
+            with patch("app.QFileDialog.getOpenFileName", return_value=(str(invalid), "")), \
+                    patch("app.QMessageBox.warning") as warning:
+                dialog.browse_button.click()
+                warning.assert_called_once()
+            self.assertEqual(dialog.icon_name, str(path))
+            dialog.restore_button.click()
+            self.assertEqual(dialog.icon_name, "")
+            self.assertFalse(dialog.restore_button.isEnabled())
+            self.assertEqual(dialog.icon_status.text(), "Dynamic lighting status enabled")
+            self.assertEqual(dialog.room.currentData(), "r1")
+            dialog.reject()
+            self.assertEqual(dialog.result(), QDialog.DialogCode.Rejected)
+
+    def test_missing_custom_icon_falls_back_and_can_be_reset(self):
+        parent = QWidget()
+        self.addCleanup(parent.deleteLater)
+        with TemporaryDirectory() as folder:
+            dialog = TraySettingsDialog(parent, "", {}, icon_name=str(Path(folder) / "missing.ico"))
+            self.addCleanup(dialog.deleteLater)
+            self.assertIn("unavailable", dialog.icon_status.text())
+            self.assertTrue(dialog.restore_button.isEnabled())
+            dialog.restore_button.click()
+            dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Save).click()
+            self.assertEqual(dialog.result(), QDialog.DialogCode.Accepted)
+            self.assertEqual(dialog.icon_name, "")
 
     def test_diagnostics_accessible_from_tray_settings_without_closing(self):
         class FakeMain(QWidget):

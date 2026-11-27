@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redesigned Tray settings into separate room, tray appearance and mouse-control sections with native styling, an icon preview and aligned mouse illustrations.
+- Restored Windows custom notification-area icons through the native .ico file picker, with persisted selection, invalid-file handling, a dynamic-status disclaimer and a one-click default reset. Save applies changes; Cancel preserves the current tray.
 - Default notification-area lamp now indicates the power state of all approved lights and follows the desktop colour mode.
 - Full-colour Lysnav logo is used for application windows, launchers and package icons; raster package icons are generated from the canonical SVG.
 

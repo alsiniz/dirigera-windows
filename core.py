@@ -188,7 +188,7 @@ def read_config() -> dict:
         path = path.parent.parent / "DIRIGERA" / path.name
     if not path.exists():
         return {"ip": "", "token": "", "approved": {}, "approved_sensors": {},
-                "tray_room": ""}
+                "tray_room": "", "tray_icon_path": ""}
     data = json.loads(path.read_text(encoding="utf-8"))
     raw = data.get("approved", {})
     sensor_raw = data.get("approved_sensors", {})
@@ -198,6 +198,8 @@ def read_config() -> dict:
         "approved": {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {},
         "approved_sensors": {str(k): str(v) for k, v in sensor_raw.items()} if isinstance(sensor_raw, dict) else {},
         "tray_room": str(data.get("tray_room", "")),
+        # Do not interpret an old KDE icon theme name as a Windows file path.
+        "tray_icon_path": data.get("tray_icon_path", "") if isinstance(data.get("tray_icon_path"), str) else "",
     }
 
 

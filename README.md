@@ -70,7 +70,14 @@ A DHCP reservation in your router helps the hub keep the same IP address.
 
 Look for the **lamp icon** by the clock. If Windows puts it behind the
 tray chevron, drag it out to the area by the clock. Choose the controlled room
-in **Tray settings**.
+in **Tray settings**. The **Tray appearance** section previews the selected icon.
+Choose **Choose icon file…** to open the native Windows file picker and select
+a valid `.ico` file. Custom icons stay static instead of reflecting lighting
+power; **Restore default dynamic icon** restores the live lamp. Save applies
+the selection; Cancel leaves it unchanged. Lysnav remembers the selected file
+path between launches, so keep the file in a permanent location. If it is
+unavailable when Lysnav starts or the settings are saved, the default lamp is
+used. The full-colour application and taskbar button icons are unaffected.
 
 | Interaction | What happens |
 | --- | --- |

@@ -19,6 +19,7 @@ class SettingsTests(unittest.TestCase):
             "approved": {"bulb": "room"},
             "approved_sensors": {"sensor": "room"},
             "tray_room": "room",
+            "tray_icon_path": "",
         }
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
@@ -30,6 +31,19 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
 
 
+    def test_windows_custom_icon_preference_survives_roundtrip(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            icon_path = str(Path(directory) / "custom.ico")
+            settings = dict(ip="hub.local", token="test-token", approved={"lamp": "room"},
+                            approved_sensors={}, tray_room="room", tray_icon_path=icon_path)
+            with patch("core.config_path", return_value=path):
+                write_config(settings)
+                self.assertEqual(read_config(), settings)
+                write_config({**settings, "tray_icon_path": ""})
+                self.assertEqual(read_config()["tray_icon_path"], "")
+
+
 class ConfigUpgradeTests(unittest.TestCase):
     def test_existing_pairing_and_approvals_survive_rebrand(self):
         with TemporaryDirectory() as folder, patch.dict(os.environ, {"LOCALAPPDATA": folder}):
@@ -39,7 +53,7 @@ class ConfigUpgradeTests(unittest.TestCase):
                             approved_sensors={"sensor": "room"}, tray_room="room")
             old.write_text(json.dumps(settings), encoding="utf-8")
             self.assertEqual(config_path(), Path(folder) / "Lysnav" / "config.json")
-            self.assertEqual(read_config(), settings)
+            self.assertEqual(read_config(), {**settings, "tray_icon_path": ""})
 
             # Revoking approval in Lysnav must take precedence over the older file.
             write_config({**settings, "approved": {}})
