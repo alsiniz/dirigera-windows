@@ -210,6 +210,37 @@ class TraySettingsTests(unittest.TestCase):
             self.assertEqual(dialog.result(), QDialog.DialogCode.Accepted)
             self.assertEqual(dialog.icon_name, "")
 
+    def test_icon_action_buttons_have_equal_unclipped_height(self):
+        parent = QWidget()
+        self.addCleanup(parent.deleteLater)
+        # Cover larger fonts as well as the usual desktop font size.
+        for larger in (False, True):
+            with self.subTest(larger_font=larger):
+                font = self.app.font()
+                if larger:
+                    if font.pointSize() > 0:
+                        font.setPointSize(font.pointSize() + 6)
+                    else:
+                        font.setPixelSize(max(1, font.pixelSize()) + 8)
+                parent.setFont(font)
+                dialog = TraySettingsDialog(parent, "r1", {"r1": "Room"})
+                self.addCleanup(dialog.deleteLater)
+                dialog.show()
+                self.app.processEvents()
+                dialog.resize(dialog.minimumSizeHint())
+                self.app.processEvents()
+                browse, restore = dialog.browse_button, dialog.restore_button
+                self.assertFalse(restore.isEnabled())
+                for enabled in (False, True):
+                    restore.setEnabled(enabled)
+                    self.app.processEvents()
+                    self.assertEqual(browse.height(), restore.height())
+                    for button in (browse, restore):
+                        self.assertGreaterEqual(button.height(), 32)
+                        self.assertGreaterEqual(button.height(), button.fontMetrics().height() + 12)
+                        self.assertGreaterEqual(button.height(), button.sizeHint().height())
+                dialog.close()
+
     def test_diagnostics_accessible_from_tray_settings_without_closing(self):
         class FakeMain(QWidget):
             def __init__(self):

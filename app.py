@@ -685,6 +685,15 @@ class TraySettingsDialog(QDialog):
         self.restore_button.setAutoDefault(False)
         self.restore_button.clicked.connect(self.restore_default_icon)
         actions.addWidget(self.restore_button)
+        # Native styles can otherwise squeeze this nested action row until
+        # button labels are clipped. Keep a shared, font-aware height floor.
+        icon_buttons = (self.browse_button, self.restore_button)
+        button_height = max(32, *(max(button.sizeHint().height(),
+                                      button.fontMetrics().height() + 12)
+                                  for button in icon_buttons))
+        for button in icon_buttons:
+            button.setMinimumHeight(button_height)
+            button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         actions.addStretch()
         details.addLayout(actions)
         icon_row.addLayout(details, stretch=1)
