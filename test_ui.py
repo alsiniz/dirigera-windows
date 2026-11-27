@@ -3,13 +3,16 @@ from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from struct import pack
+import gc
+import tracemalloc
+import sys
 import os
 import unittest
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PySide6.QtCore import Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer
+    from PySide6.QtCore import QObject, Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer
     from PySide6.QtTest import QTest
     from PySide6.QtGui import QWheelEvent, QIcon
     from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox
@@ -30,6 +33,37 @@ def write_test_ico(path):
     path.write_bytes(pack("<HHH", 0, 1, 1)
                      + pack("<BBBBHHII", size, size, 0, 0, 1, 32, len(dib), 22)
                      + dib)
+
+
+def process_memory_bytes():
+    """Current resident/working-set bytes, diagnostic only (not a leak verdict)."""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class Counters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+                (name, ctypes.c_size_t) for name in (
+                    "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                    "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                    "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi.GetProcessMemoryInfo.argtypes = (
+            wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD)
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        stats = Counters()
+        stats.cb = ctypes.sizeof(stats)
+        if psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(stats), stats.cb):
+            return stats.WorkingSetSize
+    elif sys.platform.startswith("linux"):
+        try:
+            return int(Path("/proc/self/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+        except (OSError, ValueError, IndexError):
+            pass
+    return None
 
 
 @unittest.skipUnless(ClickToJumpSlider is not None, 'PySide6 not installed')
@@ -314,6 +348,92 @@ class RefreshLifetimeTests(unittest.TestCase):
                 write.assert_called_once()
             self.assertEqual(window.tray.icon().pixmap(64, 64).toImage()
                              .pixelColor(32, 25).name(), "#fe8019")
+
+    def test_memory_stress_dynamic_icons_refresh_and_dialogs(self):
+        """Exercise thousands of updates; assert bounded live resources after warmup."""
+        window = self.window
+        mode = [False]
+        states = (replace(self.light, on=False), self.light)
+        with TemporaryDirectory() as folder, patch("app.panel_icon_filename", new=lambda active=False:
+                    f"tray-{'dark' if mode[0] else 'light'}{'-on' if active else ''}.svg"):
+            custom_paths = []
+            for i in range(8):
+                path = Path(folder) / f"custom-{i}.ico"
+                write_test_ico(path)
+                custom_paths.append(str(path))
+
+            def drain():
+                self.app.processEvents()
+                self.flush_deletions()
+                gc.collect()
+
+            def exercise():
+                # All four state combinations. Do not let a recording mock
+                # itself accumulate thousands of call objects.
+                for n in range(500):
+                    mode[0] = bool(n & 2)
+                    window.lights = [states[n & 1]]
+                    window.update_tray_tooltip()
+                for n in range(50):
+                    mode[0] = bool(n & 2)
+                    old = window.tabs.widget(0)
+                    window.on_loaded(([states[n & 1]], [self.sensor], ""))
+                    self.flush_deletions()
+                    if old is not None:
+                        self.assertFalse(isValid(old))
+                for n in range(16):
+                    path = custom_paths[n % len(custom_paths)]
+                    window.config["tray_icon_path"] = path
+                    window._sync_panel_icon()
+                    dialog = TraySettingsDialog(window, "room", {"room": "Study"},
+                            default_icon=lambda: window._default_panel_qicon()[1])
+                    dialog.icon_name = path
+                    dialog.update_icon_preview()
+                    dialog.restore_default_icon()
+                    dialog.reject()
+                    dialog.deleteLater()
+                    self.flush_deletions()
+                    self.assertFalse(isValid(dialog))
+                window.config["tray_icon_path"] = ""
+                mode[0] = False
+                window.lights = [states[0]]
+                window.update_tray_tooltip()
+                drain()
+
+            # First batch fills Qt/font/icon caches and establishes steady state.
+            exercise()
+            baseline_objects = len(window.findChildren(QObject))
+            self.assertEqual(len(window._panel_icon_cache), 4)
+            before = process_memory_bytes()
+            already_tracing = tracemalloc.is_tracing()
+            if not already_tracing:
+                tracemalloc.start()
+            try:
+                drain()
+                baseline_python = tracemalloc.get_traced_memory()[0]
+                samples = []
+                for batch in range(4):
+                    exercise()
+                    current = tracemalloc.get_traced_memory()[0]
+                    rss = process_memory_bytes()
+                    objects = len(window.findChildren(QObject))
+                    samples.append((batch + 1, current - baseline_python, rss, objects))
+                    self.assertLessEqual(objects, baseline_objects + 4)
+                    self.assertFalse(window.findChildren(TraySettingsDialog))
+                    self.assertEqual(len(window._panel_icon_cache), 4)
+                retained = tracemalloc.get_traced_memory()[0] - baseline_python
+                print(f"MEMORY_STRESS: warmup=1 batch; measured=2000 icon updates, "
+                      f"200 refreshes, 64 custom icon/dialog cycles; "
+                      f"baseline_objects={baseline_objects}; baseline_rss_bytes={before}; "
+                      f"samples(batch,python_delta_bytes,rss_bytes,qt_objects)={samples}; "
+                      f"final_python_delta_bytes={retained}", flush=True)
+                # A generous guard against sustained Python allocation growth;
+                # RSS is reported, not gated because native allocators retain arenas.
+                self.assertLess(retained, 2 * 1024 * 1024)
+            finally:
+                if not already_tracing:
+                    tracemalloc.stop()
+
 
     def test_repeated_refresh_disposes_old_pages_and_reuses_menu(self):
         window = self.window
