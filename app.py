@@ -15,7 +15,7 @@ from version import APP_NAME, VERSION, KOFI_URL
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile
+from PySide6.QtCore import QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile
 from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
@@ -27,6 +27,23 @@ from PySide6.QtWidgets import (
 from core import (apply, approved_climate, approved_visible, config_path, environment_snapshot, read_config, snapshot,
                   toggle_power, wheel_steps, stepped_brightness, tray_power_targets,
                   tray_room, tray_targets, write_config)
+
+
+ASSETS = Path(__file__).resolve().parent / "assets"
+
+
+def panel_icon_filename():
+    # Windows can use different colour modes for apps and the shell.
+    light = QApplication.palette().window().color().lightness() >= 128
+    if sys.platform == "win32":
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+                light = bool(winreg.QueryValueEx(key, "SystemUsesLightTheme")[0])
+        except OSError:
+            pass
+    return "tray-light.ico" if light else "tray-dark.ico"
 
 
 class HubWorker(QThread):
@@ -674,7 +691,9 @@ class MainWindow(QMainWindow):
 
     def _create_tray(self):
         self._tray_menu = self.create_tray_menu()
-        self.tray = QSystemTrayIcon(self.windowIcon(), self)
+        self.tray = QSystemTrayIcon(self)
+        self._panel_icon_name = None
+        self._sync_panel_icon()
         self.tray.setContextMenu(self._tray_menu)
         self.tray.activated.connect(self.on_tray_activation)
         self.tray_wheel = TrayWheelHook(self.tray, self._tray_menu)
@@ -685,6 +704,22 @@ class MainWindow(QMainWindow):
         if sys.platform == "win32":
             self.tray.show()
             self.tray_wheel.start()
+
+    def _sync_panel_icon(self):
+        filename = panel_icon_filename()
+        if filename != self._panel_icon_name:
+            self._panel_icon_name = filename
+            icon = QIcon(str(ASSETS / filename))
+            self.setWindowIcon(icon)
+            self.tray.setIcon(icon)
+
+    def nativeEvent(self, event_type, message):
+        if sys.platform == "win32" and hasattr(self, "_panel_icon_name"):
+            from ctypes.wintypes import MSG
+            # WM_SETTINGCHANGE and WM_THEMECHANGED are broadcast to top-level windows.
+            if MSG.from_address(int(message)).message in (0x001A, 0x031A):
+                self._sync_panel_icon()
+        return super().nativeEvent(event_type, message)
 
     def on_tray_activation(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -788,7 +823,13 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         heading = QLabel(f'{APP_NAME}  ·  {VERSION}')
         heading.setStyleSheet('font-size: 20px; font-weight: bold')
-        layout.addWidget(heading)
+        logo = QLabel()
+        logo.setPixmap(QIcon(str(ASSETS / "lysnav-logo.svg")).pixmap(
+            QSize(56, 56), dialog.devicePixelRatioF()))
+        header = QHBoxLayout()
+        header.addWidget(logo)
+        header.addWidget(heading, stretch=1)
+        layout.addLayout(header)
         text = QTextBrowser()
         text.setOpenExternalLinks(True)
         text.setHtml(f"""
@@ -1272,13 +1313,16 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "lysnav.ico")))
+    app.setWindowIcon(QIcon(str(ASSETS / panel_icon_filename())))
     if sys.argv[1:] == ["--check-runtime"]:
         # Exercise the frozen Qt platform and icon loading without opening a
         # window, installing the tray hook, or connecting to a hub.
         from dirigera.hub import auth
 
-        if app.windowIcon().pixmap(16, 16).isNull() or not callable(auth.main):
+        for filename in ("lysnav-logo.svg", "tray-light.ico", "tray-dark.ico"):
+            if QIcon(str(ASSETS / filename)).pixmap(32, 32).isNull():
+                sys.exit(1)
+        if not callable(auth.main):
             sys.exit(1)
         return
 
@@ -1327,7 +1371,9 @@ def main():
         and bool(window.config["ip"] and window.config["token"])
         and QSystemTrayIcon.isSystemTrayAvailable()
     )
-    if not start_in_tray:
+    if start_in_tray:
+        window.winId()  # Create the hidden native window for system theme notifications.
+    else:
         window.show()
     sys.exit(app.exec())
 

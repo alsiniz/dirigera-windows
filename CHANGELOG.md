@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adopted the Table Lamp logo and monochrome light- and dark-panel icons. The running app follows the Windows system colour mode.
 - Renamed the app to Lysnav for Windows. The README and About view now identify Lysnav as an independent third-party app.
 - Renamed the installed executable to `Lysnav.exe` and future installer and portable downloads to use the `Lysnav-Windows-` prefix. Existing installs retain their installer identity, pairing, and device approvals.
 

@@ -1,5 +1,7 @@
 # Lysnav for Windows
 
+<img src="assets/lysnav-logo.svg" alt="Lysnav table lamp logo" width="96" height="96">
+
 The name **Lysnav** is a Scandinavian-inspired combination of *lys* (light) and *nav* (hub).
 
 Lysnav is an independent third-party application and is not affiliated with, endorsed by, or sponsored by IKEA.
@@ -13,14 +15,14 @@ hub over your local network.
 [![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 [![Platform: Windows 11 x64](https://img.shields.io/badge/Platform-Windows%2011%20x64-0078d4.svg)](#requirements)
 
-This is the Qt-based Windows port of [Lysnav for KDE Plasma](https://github.com/alsiniz/dirigera-plasma),
-based on upstream commit [`a334176`](https://github.com/alsiniz/dirigera-plasma/commit/a334176309953518c76e9b2339e4c152c99556ae).
+This is the Qt-based Windows port of [Lysnav for KDE Plasma](https://github.com/alsiniz/lysnav-plasma),
+based on upstream commit [`a334176`](https://github.com/alsiniz/lysnav-plasma/commit/a334176309953518c76e9b2339e4c152c99556ae).
 
 ## Why Lysnav for Windows?
 
 - **Local control.** Use your existing hub over the LAN without a cloud login
   or a separate automation server.
-- **Quick tray controls.** Scroll over the lightbulb icon to dim or brighten.
+- **Quick tray controls.** Scroll over the lamp icon to dim or brighten.
   Middle-click to toggle the approved lights in your selected room.
 - **In-app pairing.** Generate the hub access token from **Hub settings**.
 - **Shared households.** Choose exactly which lights the app can control and
@@ -40,7 +42,7 @@ hub continues to manage its devices.
 
 ## Install
 
-Download the **pre-rebrand v1.0.0-rc.2** from [GitHub Releases](https://github.com/alsiniz/dirigera-windows/releases/tag/v1.0.0-rc.2).
+Download the **pre-rebrand v1.0.0-rc.2** from [GitHub Releases](https://github.com/alsiniz/lysnav-windows/releases/tag/v1.0.0-rc.2).
 
 | Download | How to use it |
 | --- | --- |
@@ -66,7 +68,7 @@ A DHCP reservation in your router helps the hub keep the same IP address.
 
 ## Control from the Windows tray
 
-Look for the **lightbulb icon** by the clock. If Windows puts it behind the
+Look for the **lamp icon** by the clock. If Windows puts it behind the
 tray chevron, drag it out to the area by the clock. Choose the controlled room
 in **Tray settings**.
 
@@ -102,7 +104,7 @@ in the main window to exit.
 | Pairing fails after you click Continue | Start a new pairing request and press the physical action button when prompted. |
 | A bulb or sensor is missing | Open **Choose devices** and review newly added or moved devices. |
 | Colour options are unavailable | Check whether the bulbs support RGB or colour temperature. |
-| Tray scrolling or middle-click does nothing | Move the lightbulb out of tray overflow. Open **Tray settings → Input diagnostics** to see whether input reached the app. |
+| Tray scrolling or middle-click does nothing | Move the lamp icon out of tray overflow. Open **Tray settings → Input diagnostics** to see whether input reached the app. |
 
 When reporting a problem, include the app version, Windows version, and
 the steps to reproduce it. Keep your token and configuration file private.
@@ -142,7 +144,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the changes in each release candidate.
 
 ## Built with and thanks
 
-- [Lysnav for KDE Plasma](https://github.com/alsiniz/dirigera-plasma) by alsiniz
+- [Lysnav for KDE Plasma](https://github.com/alsiniz/lysnav-plasma) by alsiniz
   and contributors, the original desktop controller.
 - [dirigera](https://github.com/Leggin/dirigera) for the local hub client.
 - [Qt for Python](https://doc.qt.io/qtforpython-6/) for the desktop interface.
@@ -150,6 +152,8 @@ See [CHANGELOG.md](CHANGELOG.md) for the changes in each release candidate.
 This independent community project is licensed under [MIT](LICENSE).
 See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components.
 
+The running app uses a monochrome lamp in the taskbar and notification area. It follows the Windows system colour mode, including when your apps use a different mode.
+
 ## Lysnav editions
 
-The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the icon proposals](docs/branding/README.md).
+The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the logo and panel icons](docs/branding/README.md).

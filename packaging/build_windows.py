@@ -83,7 +83,7 @@ def freeze_app(name, mode, output):
             "--name", name, "--icon", str(APP_ICON),
             "--distpath", str(output), "--workpath", str(BUILD / "pyinstaller"),
             "--specpath", str(BUILD),
-            "--add-data", f"{APP_ICON}:assets",
+            "--add-data", f"{ROOT / 'assets'}:assets",
             *extra_data,
             "--copy-metadata", "PySide6-Essentials", "--copy-metadata", "dirigera",
             str(ROOT / "app.py"),

@@ -1,6 +1,12 @@
-# Lysnav icon studies
+# Lysnav identity
 
-## Table lamp and windows
+![Lysnav logo and monochrome lamp icons on light and dark panels](logo-and-panel-icons.png)
+
+The [Table Lamp logo](../../assets/lysnav-logo.svg) has a `#282828` rounded square, a `#fe8019` shade and a `#ebdbb2` stem and base. Use it for the app identity and About view.
+
+For system panels, use the transparent [light-mode icon](../../assets/tray-light.svg) with a dark lamp or the [dark-mode icon](../../assets/tray-dark.svg) with a light lamp. The tighter crop keeps the silhouette legible at small sizes.
+
+## Earlier table lamp and window studies
 
 ![Table Lamp, Gable Window, Arched Window and Open Casement with single-colour details at 24 and 16 pixels on light and dark panels](table-lamp-and-windows.png)
 

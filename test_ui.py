@@ -2,7 +2,7 @@
 from dataclasses import replace
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
@@ -11,10 +11,25 @@ try:
     from PySide6.QtGui import QWheelEvent
     from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea
     from shiboken6 import isValid
-    from app import ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
+    from app import panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
     from core import EnvironmentInfo, LightInfo
 except ImportError:
     ClickToJumpSlider = None
+
+
+@unittest.skipUnless(ClickToJumpSlider is not None, 'PySide6 not installed')
+class PanelIconTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_taskbar_uses_system_colour_setting(self):
+        registry = MagicMock()
+        with patch('sys.platform', 'win32'), patch.dict('sys.modules', winreg=registry):
+            for value, filename in [(0, 'tray-dark.ico'), (1, 'tray-light.ico')]:
+                registry.QueryValueEx.return_value = (value, 4)
+                self.assertEqual(panel_icon_filename(), filename)
+            self.assertEqual(registry.QueryValueEx.call_args.args[1], 'SystemUsesLightTheme')
 
 
 @unittest.skipUnless(ClickToJumpSlider is not None, 'PySide6 not installed (non-UI test environment)')
