@@ -152,7 +152,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the changes in each release candidate.
 This independent community project is licensed under [MIT](LICENSE).
 See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components.
 
-The running app uses a monochrome lamp in the taskbar and notification area. It follows the Windows system colour mode, including when your apps use a different mode.
+The notification-area lamp follows the Windows system colour mode, including when apps use a different mode. Its shade turns orange when any approved light is on. The application window, taskbar button, shortcuts and executables use the full-colour Lysnav logo.
 
 ## Lysnav editions
 

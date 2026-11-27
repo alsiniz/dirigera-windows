@@ -32,7 +32,7 @@ from core import (apply, approved_climate, approved_visible, config_path, enviro
 ASSETS = Path(__file__).resolve().parent / "assets"
 
 
-def panel_icon_filename():
+def panel_icon_filename(active=False):
     # Windows can use different colour modes for apps and the shell.
     light = QApplication.palette().window().color().lightness() >= 128
     if sys.platform == "win32":
@@ -43,7 +43,8 @@ def panel_icon_filename():
                 light = bool(winreg.QueryValueEx(key, "SystemUsesLightTheme")[0])
         except OSError:
             pass
-    return "tray-light.ico" if light else "tray-dark.ico"
+    mode = "light" if light else "dark"
+    return f"tray-{mode}{'-on' if active else ''}.svg"
 
 
 class HubWorker(QThread):
@@ -618,6 +619,9 @@ class MainWindow(QMainWindow):
         self.config = read_config()
         self.lights = []
         self.sensors = []
+        self._tray_state_stale = True
+        self._panel_icon_cache = {}
+        self.setWindowIcon(QIcon(str(Path(__file__).parent / "assets" / "lysnav-logo.svg")))
         self.sensor_warning = ""
         self.worker = None
         self.color_dialog = None
@@ -706,12 +710,13 @@ class MainWindow(QMainWindow):
             self.tray_wheel.start()
 
     def _sync_panel_icon(self):
-        filename = panel_icon_filename()
+        active = any(l.on for l in approved_visible(self.lights, self.config["approved"]))
+        filename = panel_icon_filename(active)
         if filename != self._panel_icon_name:
             self._panel_icon_name = filename
-            icon = QIcon(str(ASSETS / filename))
-            self.setWindowIcon(icon)
-            self.tray.setIcon(icon)
+            if filename not in self._panel_icon_cache:
+                self._panel_icon_cache[filename] = QIcon(str(ASSETS / filename))
+            self.tray.setIcon(self._panel_icon_cache[filename])
 
     def nativeEvent(self, event_type, message):
         if sys.platform == "win32" and hasattr(self, "_panel_icon_name"):
@@ -749,9 +754,11 @@ class MainWindow(QMainWindow):
             summary.append(f"{humidity:g}% RH")
         climate = " · ".join(summary) if summary else "No approved climate readings"
         # Keep climate readings before the room name within the Shell tooltip limit.
-        return f"{climate}\n{name}"
+        warning = "\nLight status unverified / last known" if self._tray_state_stale else ""
+        return f"{climate}{warning}\n{name}"
 
     def update_tray_tooltip(self):
+        self._sync_panel_icon()
         self.tray.setToolTip(self._tray_tooltip())
 
     def _approved_rooms(self):
@@ -1011,6 +1018,7 @@ class MainWindow(QMainWindow):
         write_config(self.config)
         self.lights = []
         self.sensors = []
+        self._tray_state_stale = True
         self._tray_pending_level = None
         self._tray_pending_ids = ()
         self._tray_scroll_accumulator = 0
@@ -1037,6 +1045,7 @@ class MainWindow(QMainWindow):
         lights, sensors, self.sensor_warning = result
         self.lights = lights
         self.sensors = sensors
+        self._tray_state_stale = False
         self.approvals_btn.setEnabled(True)
         self.refresh_timer.start()
         self.render_tabs()
@@ -1059,6 +1068,9 @@ class MainWindow(QMainWindow):
         self.status.setText(message)
 
     def on_failed(self, error):
+        # A failed request is not evidence that the lights are off.
+        self._tray_state_stale = True
+        self.update_tray_tooltip()
         self.status.setText(f"Request failed: {error}")
 
     def choose_devices(self):
@@ -1313,13 +1325,14 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon(str(ASSETS / panel_icon_filename())))
+    app.setWindowIcon(QIcon(str(ASSETS / "lysnav-logo.svg")))
     if sys.argv[1:] == ["--check-runtime"]:
         # Exercise the frozen Qt platform and icon loading without opening a
         # window, installing the tray hook, or connecting to a hub.
         from dirigera.hub import auth
 
-        for filename in ("lysnav-logo.svg", "tray-light.ico", "tray-dark.ico"):
+        for filename in ("lysnav-logo.svg", "tray-light.svg", "tray-dark.svg",
+                         "tray-light-on.svg", "tray-dark-on.svg"):
             if QIcon(str(ASSETS / filename)).pixmap(32, 32).isNull():
                 sys.exit(1)
         if not callable(auth.main):

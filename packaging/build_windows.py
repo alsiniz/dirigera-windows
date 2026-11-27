@@ -15,12 +15,49 @@ from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
-APP_ICON = ROOT / "assets" / "lysnav.ico"
+APP_ICON = BUILD / "lysnav.ico"
 DIST = ROOT / "dist"
 RELEASE = ROOT / "release"
 APP = DIST / "Lysnav"
 PORTABLE_EXE = RELEASE / "portable-exe"
 BUNDLE_DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md")
+
+
+def generate_app_icon():
+    """Rasterize the canonical SVG into a multi-resolution Windows ICO."""
+    from struct import pack
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QGuiApplication, QIcon, QImage
+
+    app = QGuiApplication.instance() or QGuiApplication([])
+    icon = QIcon(str(ROOT / "assets" / "lysnav-logo.svg"))
+    sizes = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+    entries = []
+    images = []
+    offset = 6 + 16 * len(sizes)
+    for size in sizes:
+        image = icon.pixmap(QSize(size, size)).toImage().convertToFormat(QImage.Format.Format_ARGB32)
+        if image.isNull() or image.width() != size or image.height() != size:
+            raise RuntimeError(f"Unable to render Lysnav logo at {size}px")
+        raw = bytes(image.constBits())
+        stride = image.bytesPerLine()
+        # ICO DIBs are bottom-up BGRA with a padded one-bit transparency mask.
+        pixels = b"".join(raw[y * stride:y * stride + size * 4]
+                          for y in reversed(range(size)))
+        mask_stride = ((size + 31) // 32) * 4
+        mask = bytearray(mask_stride * size)
+        for y in range(size):
+            for x in range(size):
+                if pixels[(y * size + x) * 4 + 3] == 0:
+                    mask[y * mask_stride + x // 8] |= 0x80 >> (x % 8)
+        dib = pack("<IiiHHIIiiII", 40, size, size * 2, 1, 32, 0,
+                   len(pixels), 0, 0, 0, 0) + pixels + mask
+        entries.append(pack("<BBBBHHII", size % 256, size % 256, 0, 0,
+                            1, 32, len(dib), offset))
+        images.append(dib)
+        offset += len(dib)
+    APP_ICON.parent.mkdir(exist_ok=True)
+    APP_ICON.write_bytes(pack("<HHH", 0, 1, len(sizes)) + b"".join(entries + images))
 
 
 def find_iscc():
@@ -124,6 +161,7 @@ def main():
     sys.path.insert(0, str(ROOT))
     from version import VERSION
 
+    generate_app_icon()
     portable_name = f"Lysnav-Windows-{VERSION}-x64-Portable"
     portable_executable = PORTABLE_EXE / f"{portable_name}.exe"
     if not args.package_only:

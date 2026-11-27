@@ -26,9 +26,10 @@ class PanelIconTests(unittest.TestCase):
     def test_taskbar_uses_system_colour_setting(self):
         registry = MagicMock()
         with patch('sys.platform', 'win32'), patch.dict('sys.modules', winreg=registry):
-            for value, filename in [(0, 'tray-dark.ico'), (1, 'tray-light.ico')]:
+            for value, filename in [(0, 'tray-dark.svg'), (1, 'tray-light.svg')]:
                 registry.QueryValueEx.return_value = (value, 4)
                 self.assertEqual(panel_icon_filename(), filename)
+                self.assertEqual(panel_icon_filename(True), filename.replace('.svg', '-on.svg'))
             self.assertEqual(registry.QueryValueEx.call_args.args[1], 'SystemUsesLightTheme')
 
 
@@ -144,6 +145,35 @@ class RefreshLifetimeTests(unittest.TestCase):
 
     def flush_deletions(self):
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_tray_status_is_global_approved_and_does_not_replace_app_logo(self):
+        window = self.window
+        window.config["tray_room"] = "other"
+        unapproved = replace(self.light, id="unapproved")
+        moved = replace(self.light, room_id="moved")
+        off = replace(self.light, on=False)
+        with patch('app.panel_icon_filename', side_effect=lambda active=False: 'tray-dark-on.svg' if active else 'tray-dark.svg'):
+            def shade():
+                return window.tray.icon().pixmap(64, 64).toImage().pixelColor(32, 25).name()
+            def app_shade():
+                return window.windowIcon().pixmap(64, 64).toImage().pixelColor(32, 20).name()
+
+            window.on_loaded(([off, unapproved, moved], [], ""))
+            self.assertEqual(shade(), "#ebdbb2")
+            self.assertEqual(app_shade(), "#fe8019")
+            window.on_loaded(([self.light, unapproved], [], ""))
+            self.assertEqual(shade(), "#fe8019")
+            window.on_failed("offline")
+            self.assertEqual(shade(), "#fe8019")
+            self.assertIn("last known", window._tray_tooltip())
+            window.on_loaded(([off, unapproved], [], ""))
+            self.assertEqual(shade(), "#ebdbb2")
+            self.assertNotIn("last known", window._tray_tooltip())
+            window.on_loaded(([self.light], [], ""))
+            window.config["approved"] = {}
+            window.update_tray_tooltip()
+            self.assertEqual(shade(), "#ebdbb2")
+            self.assertEqual(app_shade(), "#fe8019")
 
     def test_repeated_refresh_disposes_old_pages_and_reuses_menu(self):
         window = self.window
