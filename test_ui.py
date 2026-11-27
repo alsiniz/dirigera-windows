@@ -1,5 +1,6 @@
 """Qt slider regression test. Run with QT_QPA_PLATFORM=offscreen on CI."""
 from dataclasses import replace
+from pathlib import Path
 import os
 import unittest
 from unittest.mock import MagicMock, patch
@@ -8,7 +9,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
     from PySide6.QtCore import Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer
     from PySide6.QtTest import QTest
-    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtGui import QWheelEvent, QIcon
     from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea
     from shiboken6 import isValid
     from app import panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, MainWindow
@@ -22,6 +23,22 @@ class PanelIconTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_all_four_tray_assets_have_exact_colours_and_transparency(self):
+        assets = Path(__file__).resolve().parent / "assets"
+        for mode, base in (("light", "#282828"), ("dark", "#ebdbb2")):
+            for active in (False, True):
+                with self.subTest(mode=mode, active=active):
+                    suffix = "-on" if active else ""
+                    icon = QIcon(str(assets / f"tray-{mode}{suffix}.svg"))
+                    image = icon.pixmap(64, 64).toImage()
+                    self.assertFalse(image.isNull())
+                    self.assertEqual(image.pixelColor(32, 25).name(),
+                                     "#fe8019" if active else base)
+                    self.assertEqual(image.pixelColor(32, 50).name(), base)
+                    self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
+        self.assertEqual((assets / "lysnav.svg").read_bytes(),
+                         (assets / "lysnav-logo.svg").read_bytes())
 
     def test_taskbar_uses_system_colour_setting(self):
         registry = MagicMock()

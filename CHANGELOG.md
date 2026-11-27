@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Default notification-area lamp now indicates the power state of all approved lights and follows the desktop colour mode.
+- Full-colour Lysnav logo is used for application windows, launchers and package icons; raster package icons are generated from the canonical SVG.
+
 ## 1.0.0-rc.3 (2026-11-27)
 
 - Includes the refresh-time memory fix from 1.0.0-rc.2 for long-running tray sessions. The portable executable and installer use the Qt frontend. The WinUI preview has been retired.

@@ -58,6 +58,11 @@ def generate_app_icon():
         offset += len(dib)
     APP_ICON.parent.mkdir(exist_ok=True)
     APP_ICON.write_bytes(pack("<HHH", 0, 1, len(sizes)) + b"".join(entries + images))
+    # Verify that Qt can read the generated native resource with the right colours.
+    rendered = QIcon(str(APP_ICON)).pixmap(64, 64).toImage()
+    if (rendered.isNull() or rendered.pixelColor(32, 20).name() != "#fe8019"
+            or rendered.pixelColor(32, 42).name() != "#ebdbb2"):
+        raise RuntimeError("Generated Lysnav ICO does not match the canonical logo")
 
 
 def find_iscc():
