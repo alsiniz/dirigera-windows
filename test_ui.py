@@ -210,7 +210,7 @@ class TraySettingsTests(unittest.TestCase):
             self.assertEqual(dialog.result(), QDialog.DialogCode.Accepted)
             self.assertEqual(dialog.icon_name, "")
 
-    def test_icon_action_buttons_have_equal_unclipped_height(self):
+    def test_icon_action_buttons_have_equal_unclipped_height_and_clearance(self):
         parent = QWidget()
         self.addCleanup(parent.deleteLater)
         # Cover larger fonts as well as the usual desktop font size.
@@ -227,18 +227,31 @@ class TraySettingsTests(unittest.TestCase):
                 self.addCleanup(dialog.deleteLater)
                 dialog.show()
                 self.app.processEvents()
-                dialog.resize(dialog.minimumSizeHint())
-                self.app.processEvents()
                 browse, restore = dialog.browse_button, dialog.restore_button
                 self.assertFalse(restore.isEnabled())
-                for enabled in (False, True):
-                    restore.setEnabled(enabled)
-                    self.app.processEvents()
-                    self.assertEqual(browse.height(), restore.height())
-                    for button in (browse, restore):
-                        self.assertGreaterEqual(button.height(), 32)
-                        self.assertGreaterEqual(button.height(), button.fontMetrics().height() + 12)
-                        self.assertGreaterEqual(button.height(), button.sizeHint().height())
+                # Check both the normal opening geometry and the smallest
+                # permitted dialog. Compare in one coordinate system because
+                # the buttons and notice now have different parent widgets.
+                for size in (dialog.size(), dialog.minimumSizeHint()):
+                    dialog.resize(size)
+                    for enabled in (False, True):
+                        restore.setEnabled(enabled)
+                        dialog.layout().activate()
+                        self.app.processEvents()
+                        self.assertEqual(browse.height(), restore.height())
+                        header_bottom = max(
+                            widget.mapTo(dialog, QPoint(0, widget.height())).y()
+                            for widget in (dialog.icon_preview, dialog.icon_label, dialog.icon_status))
+                        notice_top = min(
+                            widget.mapTo(dialog, QPoint(0, 0)).y()
+                            for widget in (dialog.icon_notice, dialog.icon_notice_symbol))
+                        for button in (browse, restore):
+                            self.assertGreaterEqual(button.height(), 32)
+                            self.assertGreaterEqual(button.height(), button.fontMetrics().height() + 12)
+                            self.assertGreaterEqual(button.height(), button.sizeHint().height())
+                            top = button.mapTo(dialog, QPoint(0, 0)).y()
+                            self.assertGreaterEqual(top - header_bottom, 12)
+                            self.assertGreaterEqual(notice_top - top - button.height(), 12)
                 dialog.close()
 
     def test_diagnostics_accessible_from_tray_settings_without_closing(self):

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Separated tray appearance controls and disclaimer into independent layout rows with reserved vertical clearance, including at the dialog's minimum size.
 - Prevented vertically compressed tray appearance buttons with a shared minimum height that accounts for native font and style metrics.
 - Redesigned Tray settings into separate room, tray appearance and mouse-control sections with native styling, an icon preview and aligned mouse illustrations.
 - Restored Windows custom notification-area icons through the native .ico file picker, with persisted selection, invalid-file handling, a dynamic-status disclaimer and a one-click default reset. Save applies changes; Cancel preserves the current tray.
