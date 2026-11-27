@@ -15,7 +15,7 @@ from version import APP_NAME, VERSION, KOFI_URL
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile
+from PySide6.QtCore import QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
 from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (

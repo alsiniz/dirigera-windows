@@ -43,7 +43,7 @@ jobs:
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease,targetCommitish | jq -e --arg sha "$build_sha" \
             '.isDraft and .isPrerelease and .targetCommitish == $sha'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.build_run_id }}
