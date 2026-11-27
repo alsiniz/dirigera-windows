@@ -22,6 +22,7 @@ jobs:
       - run: python -m unittest discover -v
         env:
           QT_QPA_PLATFORM: offscreen
+          LYSNAV_REQUIRE_QT_TESTS: '1'
       - run: python packaging/build_windows.py --portable-exe
         env:
           QT_QPA_PLATFORM: offscreen
