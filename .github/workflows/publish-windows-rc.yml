@@ -1,10 +1,10 @@
-name: Publish Windows release candidate
+name: Publish Windows release
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag of the draft prerelease (for example, v1.0.0-rc.1)
+        description: Draft release tag (for example, v1.0.0 or v1.0.0-rc.1)
         required: true
         type: string
       build_run_id:
@@ -29,7 +29,11 @@ jobs:
       - name: Verify draft and build commit
         shell: bash
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]
+          prerelease=false
+          if [[ "$RELEASE_TAG" == *-rc.* ]]; then
+            prerelease=true
+          fi
           [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
           review=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID")
           build_sha=$(jq -er --arg repo "$GITHUB_REPOSITORY" '
@@ -41,8 +45,9 @@ jobs:
             | .head_sha
           ' <<< "$review")
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --json isDraft,isPrerelease,targetCommitish | jq -e --arg sha "$build_sha" \
-            '.isDraft and .isPrerelease and .targetCommitish == $sha'
+            --json isDraft,isPrerelease,targetCommitish |
+            jq -e --arg sha "$build_sha" --argjson prerelease "$prerelease" \
+              '.isDraft and .isPrerelease == $prerelease and .targetCommitish == $sha'
       - uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
@@ -50,12 +55,17 @@ jobs:
           pattern: lysnav-windows-x64-*
           merge-multiple: true
           path: artifacts
-      - name: Upload executables and publish prerelease
+      - name: Upload executables and publish release
         shell: bash
         run: |
           prefix="artifacts/Lysnav-Windows-${RELEASE_TAG#v}-x64"
           test -s "$prefix-Portable.exe"
           test -s "$prefix-Setup.exe"
+          sha256sum "$prefix-Portable.exe" "$prefix-Setup.exe"
           gh release upload "$RELEASE_TAG" "$prefix-Portable.exe" "$prefix-Setup.exe" \
             --repo "$GITHUB_REPOSITORY" --clobber
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          if [[ "$RELEASE_TAG" == *-rc.* ]]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          else
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
