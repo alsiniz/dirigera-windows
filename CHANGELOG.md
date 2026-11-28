@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0 (2026-11-28)
+
+- Dialogs adapt to font size and available screen space. Long forms scroll with their action buttons visible.
+- Hub settings gives the DHCP note room to wrap. The two pairing instructions stay together beside the hub illustration.
+- The existing colour temperature slider shows the selected Kelvin value as a live tint. Its track is muted in RGB mode, and keyboard adjustments use the existing temperature command.
+
 ## 1.0.0-rc.3 (2026-11-28)
 
 - Redesigned Hub settings and token pairing with token reveal/copy controls, a two-action pairing guide, palette-adaptive vector illustration, and static IP/DHCP reservation guidance.

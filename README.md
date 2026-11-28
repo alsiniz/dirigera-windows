@@ -42,14 +42,14 @@ hub continues to manage its devices.
 
 ## Install
 
-Download the **v1.0.0-rc.3** from [GitHub Releases](https://github.com/alsiniz/lysnav-windows/releases/tag/v1.0.0-rc.3).
+Download the **v1.0.0** from [GitHub Releases](https://github.com/alsiniz/lysnav-windows/releases/tag/v1.0.0).
 
 | Download | How to use it |
 | --- | --- |
-| **Installer** · `Lysnav-Windows-1.0.0-rc.3-x64-Setup.exe` | Installs for your Windows account, adds a **Lysnav for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start Lysnav when I sign in** during setup to enable startup. |
-| **Portable** · `Lysnav-Windows-1.0.0-rc.3-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
+| **Installer** · `Lysnav-Windows-1.0.0-x64-Setup.exe` | Installs for your Windows account, adds a **Lysnav for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start Lysnav when I sign in** during setup to enable startup. |
+| **Portable** · `Lysnav-Windows-1.0.0-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
 
-> **Windows publisher verification.** This release candidate is unsigned.
+> **Windows publisher verification.** This release is unsigned.
 > Microsoft SmartScreen can show an unverified-publisher warning, and Smart App
 > Control can block execution. A publicly trusted signature is the supported
 > route for distributing the app to machines with Smart App Control enabled.
