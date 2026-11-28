@@ -17,7 +17,7 @@ try:
     from PySide6.QtGui import QWheelEvent, QIcon
     from PySide6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox, QLineEdit
     from shiboken6 import isValid
-    from app import custom_tray_qicon, native_tray_icon, panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, TokenPairingDialog, hub_action_svg, MainWindow
+    from app import custom_tray_qicon, native_tray_icon, panel_icon_filename, ClickToJumpSlider, TemperatureSlider, TraySettingsDialog, ConnectionDialog, TokenPairingDialog, hub_action_svg, MainWindow
     from core import ALL_APPROVED, EnvironmentInfo, LightInfo
 except ImportError:
     if os.environ.get('LYSNAV_REQUIRE_QT_TESTS') == '1':
@@ -151,6 +151,42 @@ class SliderTests(unittest.TestCase):
         self.assertGreater(slider.value(), 50)
         self.assertEqual(seen, [slider.value()])
         slider.close()
+
+    def test_temperature_tint_is_drawn_and_previews_an_rgb_light(self):
+        slider = TemperatureSlider("lamp")
+        self.addCleanup(slider.deleteLater)
+        slider.setRange(2700, 6500)
+        slider.setValue(2700)
+        slider.set_rgb_mode(True)
+        slider.resize(320, 32)
+        slider.show()
+        self.app.processEvents()
+
+        def track_pixel():
+            from PySide6.QtWidgets import QStyle, QStyleOptionSlider
+            option = QStyleOptionSlider()
+            slider.initStyleOption(option)
+            groove = slider.style().subControlRect(QStyle.ComplexControl.CC_Slider, option,
+                                                  QStyle.SubControl.SC_SliderGroove, slider)
+            pixmap = slider.grab()
+            point = groove.center() * pixmap.devicePixelRatio()
+            return pixmap.toImage().pixelColor(point)
+
+        self.assertTrue(slider.isEnabled())
+        self.assertEqual(track_pixel().rgba(), slider.palette().mid().color().rgba())
+        QTest.keyClick(slider, Qt.Key.Key_End)
+        self.assertEqual(slider.value(), 6500)
+        cool = track_pixel()
+        self.assertGreater(cool.blue(), cool.red())
+        QTest.keyClick(slider, Qt.Key.Key_Home)
+        warm = track_pixel()
+        self.assertGreater(warm.red(), warm.blue())
+        self.assertNotEqual(warm, cool)
+        slider.clear_preview()
+        self.assertEqual(track_pixel().rgba(), slider.palette().mid().color().rgba())
+        slider.set_rgb_mode(False)
+        self.assertEqual(track_pixel(), warm)
+        slider.hide()
 
     def test_track_click_jumps_and_emits_commit(self):
         slider = ClickToJumpSlider(Qt.Orientation.Horizontal)
@@ -476,6 +512,33 @@ class RefreshLifetimeTests(unittest.TestCase):
         self.assertFalse(window._tray_state_stale)
         image = window.tray.icon().pixmap(64, 64).toImage()
         self.assertEqual(image.pixelColor(32, 25).name(), "#fe8019")
+
+    def test_individual_temperature_stays_usable_in_rgb_mode(self):
+        window = self.window
+        rgb_light = replace(self.light, color_mode="color", temperature=2700,
+                            temp_low=2200, temp_high=6500,
+                            capabilities=self.light.capabilities + ("colorTemperature", "colorHue", "colorSaturation"))
+        window.on_loaded(([rgb_light], [], ""))
+        _, individual = window.tabs.findChildren(TemperatureSlider)
+        self.assertEqual(individual.light_id, rgb_light.id)
+        self.assertTrue(individual.isEnabled())
+        self.assertIn("RGB colour is active", individual.accessibleDescription())
+        self.assertEqual(individual._track_colour(), individual.palette().mid().color())
+
+        window.worker = MagicMock()
+        QTest.keyClick(individual, Qt.Key.Key_End)
+        window.flush_slider_wheel()
+        window.worker.submit.assert_called_once_with("control", [rgb_light.id], "temperature", 6500)
+        self.assertNotEqual(individual._track_colour(), individual.palette().mid().color())
+        window.on_failed("timeout")
+        self.assertEqual(individual._track_colour(), individual.palette().mid().color())
+
+        window.on_loaded(([replace(rgb_light, color_mode="temperature", temperature=6500)], [], ""))
+        self.flush_deletions()
+        _, individual = window.tabs.findChildren(TemperatureSlider)
+        self.assertEqual(individual.value(), 6500)
+        self.assertEqual(individual.accessibleDescription(), "")
+        self.assertNotEqual(individual._track_colour(), individual.palette().mid().color())
 
     def test_tray_selection_controls_icon_and_middle_click_targets(self):
         window = self.window

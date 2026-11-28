@@ -102,6 +102,16 @@ class SafetyTests(unittest.TestCase):
         self.hub = Hub(self.mine, self.other, self.kitchen)
         self.allow = {"mine": "bedroom"}
 
+    def test_active_colour_mode_comes_from_the_hub(self):
+        self.assertIsNone(light_info(self.mine).color_mode)
+        for mode in ("color", "temperature"):
+            self.mine.attributes.color_mode = mode
+            info = light_info(self.mine)
+            self.assertEqual(info.color_mode, mode)
+            self.assertEqual(info.temperature, 3000)
+        self.mine.attributes.color_mode = "unrecognized"
+        self.assertIsNone(light_info(self.mine).color_mode)
+
     def test_unknown_device_denied_before_any_write(self):
         with self.assertRaises(PermissionError):
             apply(self.hub, self.allow, ["mine", "someone-else"], "power", False)
