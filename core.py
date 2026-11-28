@@ -10,6 +10,7 @@ import tempfile
 from typing import Any
 
 UNASSIGNED = "__unassigned__"
+ALL_APPROVED = "__all_approved__"
 ACTIONS = {"power": "isOn", "brightness": "lightLevel", "temperature": "colorTemperature", "color": "colorHue"}
 
 
@@ -91,25 +92,20 @@ def approved_visible(lights: list[LightInfo], approved: dict[str, str]) -> list[
     return [l for l in lights if approved.get(l.id) == l.room_id]
 
 
-def tray_room(lights: list[LightInfo], approved: dict[str, str], chosen_room: str = "") -> str | None:
-    """Pick an explicitly chosen room, or auto-pick only one unambiguous room."""
-    rooms = {l.room_id for l in approved_visible(lights, approved)}
-    if chosen_room:
-        return chosen_room if chosen_room in rooms else None
-    return next(iter(rooms)) if len(rooms) == 1 else None
+def tray_power_targets(lights: list[LightInfo], approved: dict[str, str],
+                       chosen_room: str | None = None) -> list[LightInfo]:
+    """Return approved lights in the selected room or in all rooms."""
+    visible = approved_visible(lights, approved)
+    if chosen_room == ALL_APPROVED:
+        return visible
+    return [light for light in visible if light.room_id == chosen_room]
 
 
-def tray_targets(lights: list[LightInfo], approved: dict[str, str], chosen_room: str = "") -> list[LightInfo]:
-    """Wheel target: approved, still-in-room, reachable, currently ON bulbs.
-
-    Bulbs left OFF deliberately stay OFF (brightness commands might wake them).
-    A room never grants blanket authorization to its other occupants' bulbs.
-    """
-    room = tray_room(lights, approved, chosen_room)
-    if room is None:
-        return []
-    return [l for l in approved_visible(lights, approved)
-            if l.room_id == room and l.reachable and l.on and l.can("brightness")]
+def tray_targets(lights: list[LightInfo], approved: dict[str, str],
+                 chosen_room: str | None = None) -> list[LightInfo]:
+    """Dim reachable approved lights that are already on in the tray selection."""
+    return [light for light in tray_power_targets(lights, approved, chosen_room)
+            if light.reachable and light.on and light.can("brightness")]
 
 
 def stepped_brightness(values: list[int], delta_steps: int, step: int = 5) -> int:
@@ -188,16 +184,22 @@ def read_config() -> dict:
         path = path.parent.parent / "DIRIGERA" / path.name
     if not path.exists():
         return {"ip": "", "token": "", "approved": {}, "approved_sensors": {},
-                "tray_room": "", "tray_icon_path": ""}
+                "tray_room": None, "tray_icon_path": ""}
     data = json.loads(path.read_text(encoding="utf-8"))
     raw = data.get("approved", {})
+    approved = {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+    selected_room = data.get("tray_room", "")
+    if selected_room == "":
+        # Legacy Automatic selected a room only when the choice was unambiguous.
+        rooms = set(approved.values())
+        selected_room = next(iter(rooms)) if len(rooms) == 1 else None
     sensor_raw = data.get("approved_sensors", {})
     return {
         "ip": str(data.get("ip", "")),
         "token": str(data.get("token", "")),
-        "approved": {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {},
+        "approved": approved,
         "approved_sensors": {str(k): str(v) for k, v in sensor_raw.items()} if isinstance(sensor_raw, dict) else {},
-        "tray_room": str(data.get("tray_room", "")),
+        "tray_room": selected_room if isinstance(selected_room, str) else None,
         # Do not interpret an old KDE icon theme name as a Windows file path.
         "tray_icon_path": data.get("tray_icon_path", "") if isinstance(data.get("tray_icon_path"), str) else "",
     }
@@ -319,15 +321,8 @@ def approved_climate(sensors: list[EnvironmentInfo], approved: dict[str, str]) -
     return output
 
 
-def tray_power_targets(lights: list[LightInfo], approved: dict[str, str], chosen_room: str = "") -> list[LightInfo]:
-    """All specifically approved bulbs in ONE selected room; excludes others."""
-    selected = tray_room(lights, approved, chosen_room)
-    if selected is None:
-        return []
-    return [l for l in approved_visible(lights, approved) if l.room_id == selected]
-
-
-def toggle_power(hub: Any, approved: dict[str, str], target_ids: list[str]) -> tuple[int, bool]:
+def toggle_power(hub: Any, approved: dict[str, str], target_ids: list[str],
+                 *, all_rooms: bool = False) -> tuple[int, bool]:
     """Toggle approved devices only: any ON => all OFF, otherwise all ON.
 
     Re-fetch state and validate EVERY device/room before the first write.
@@ -344,7 +339,7 @@ def toggle_power(hub: Any, approved: dict[str, str], target_ids: list[str]) -> t
             raise PermissionError(f'{ident}: room changed since approval')
         _validate(light, 'power', True)
         fresh.append(light)
-    if len({room_id(light) for light in fresh}) != 1:
+    if not all_rooms and len({room_id(light) for light in fresh}) != 1:
         raise PermissionError('Cannot toggle more than one room')
     turn_on = not any(bool(getattr(light.attributes, 'is_on', False)) for light in fresh)
     for light in fresh:

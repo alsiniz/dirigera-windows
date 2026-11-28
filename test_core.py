@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace as N
 from unittest.mock import patch
 
-from core import apply, approved_visible, config_path, light_info, read_config, temp_range, write_config
+from core import ALL_APPROVED, apply, approved_visible, config_path, light_info, read_config, temp_range, write_config
 
 
 
@@ -59,6 +59,20 @@ class ConfigUpgradeTests(unittest.TestCase):
             write_config({**settings, "approved": {}})
             self.assertEqual(read_config()["approved"], {})
             self.assertEqual(json.loads(old.read_text(encoding="utf-8")), settings)
+
+
+    def test_upgrade_of_legacy_automatic_tray_selection(self):
+        with TemporaryDirectory() as directory, patch(
+            "core.config_path", return_value=Path(directory) / "config.json"
+        ):
+            write_config({"tray_room": "", "approved": {"lamp": "room"}})
+            self.assertEqual(read_config()["tray_room"], "room")
+            write_config({"tray_room": "", "approved": {"lamp": "room", "other": "other-room"}})
+            self.assertIsNone(read_config()["tray_room"])
+            write_config({"tray_room": None, "approved": {"lamp": "room"}})
+            self.assertIsNone(read_config()["tray_room"])
+            write_config({"tray_room": ALL_APPROVED, "approved": {"lamp": "room"}})
+            self.assertEqual(read_config()["tray_room"], ALL_APPROVED)
 
 
 class FakeLight:
@@ -177,8 +191,8 @@ class SensorTests(unittest.TestCase):
 
 class TraySafetyTests(unittest.TestCase):
     def setUp(self):
-        from core import tray_room, tray_targets, stepped_brightness
-        self.tray_room, self.tray_targets, self.stepped = tray_room, tray_targets, stepped_brightness
+        from core import tray_targets, stepped_brightness
+        self.tray_targets, self.stepped = tray_targets, stepped_brightness
         self.me1 = FakeLight('mine1', 'myroom')
         self.me1.attributes.is_on = True
         self.me1.attributes.light_level = 40
@@ -193,19 +207,20 @@ class TraySafetyTests(unittest.TestCase):
 
     def test_tray_only_targets_approved_room_ids(self):
         group = [light_info(x) for x in [self.me1, self.me2, self.other, self.other_room]]
-        self.assertEqual([x.id for x in self.tray_targets(group, self.allow)], ['mine1', 'mine2'])
+        self.assertEqual([x.id for x in self.tray_targets(group, self.allow, 'myroom')], ['mine1', 'mine2'])
 
     def test_tray_excludes_switched_off_bulbs(self):
         self.me2.attributes.is_on = False
         group = [light_info(x) for x in [self.me1, self.me2, self.other]]
-        self.assertEqual([x.id for x in self.tray_targets(group, self.allow)], ['mine1'])
+        self.assertEqual([x.id for x in self.tray_targets(group, self.allow, 'myroom')], ['mine1'])
 
     def test_tray_no_implicit_multi_room_control(self):
         self.allow['guest'] = 'guestroom'
         group = [light_info(x) for x in [self.me1, self.me2, self.other_room]]
-        self.assertIsNone(self.tray_room(group, self.allow))
         self.assertEqual(self.tray_targets(group, self.allow), [])
         self.assertEqual([x.id for x in self.tray_targets(group, self.allow, 'myroom')], ['mine1', 'mine2'])
+        self.assertEqual([x.id for x in self.tray_targets(group, self.allow, ALL_APPROVED)],
+                         ['mine1', 'mine2', 'guest'])
 
     def test_tray_no_fallback_if_saved_room_missing(self):
         group = [light_info(self.me1)]
@@ -215,12 +230,12 @@ class TraySafetyTests(unittest.TestCase):
         new = FakeLight('new', 'myroom')
         new.attributes.is_on = True
         group = [light_info(x) for x in [self.me1, self.me2, new]]
-        self.assertEqual([x.id for x in self.tray_targets(group, self.allow)], ['mine1', 'mine2'])
+        self.assertEqual([x.id for x in self.tray_targets(group, self.allow, 'myroom')], ['mine1', 'mine2'])
 
     def test_tray_zero_visible_when_approved_light_moves(self):
         self.me1.room.id = 'guestroom'
         group = [light_info(x) for x in [self.me1, self.me2]]
-        self.assertEqual([x.id for x in self.tray_targets(group, self.allow)], ['mine2'])
+        self.assertEqual([x.id for x in self.tray_targets(group, self.allow, 'myroom')], ['mine2'])
 
     def test_tray_step_brightness_and_boundaries(self):
         self.assertEqual(self.stepped([40, 60], 1), 55)
@@ -230,7 +245,7 @@ class TraySafetyTests(unittest.TestCase):
 
     def test_tray_never_controls_unauthorized_even_if_hub_reassigned(self):
         group = [light_info(x) for x in [self.me1, self.me2, self.other]]
-        target_ids = [x.id for x in self.tray_targets(group, self.allow)]
+        target_ids = [x.id for x in self.tray_targets(group, self.allow, 'myroom')]
         hub = Hub(self.me1, self.me2, self.other)
         apply(hub, self.allow, target_ids, 'brightness', 55)
         self.assertEqual(self.other.changed, [])
@@ -311,10 +326,28 @@ class TrayInputTests(unittest.TestCase):
         self.assertEqual(self.mine.changed, [('power', False)])
         self.assertEqual(self.mine2.changed, [('power', False)])
 
+    def test_all_approved_toggle_uses_one_power_state_across_rooms(self):
+        from core import toggle_power, tray_power_targets
+
+        self.mine2.room.id = self.allow['mine2'] = 'another-room'
+        self.mine2.attributes.is_on = True
+        lights = [light_info(light) for light in (self.mine, self.mine2, self.housemate)]
+        ids = [light.id for light in tray_power_targets(lights, self.allow, ALL_APPROVED)]
+        with self.assertRaises(PermissionError):
+            toggle_power(self.hub, self.allow, ids)
+        self.assertEqual(self.mine.changed + self.mine2.changed, [])
+
+        self.assertEqual(toggle_power(self.hub, self.allow, ids, all_rooms=True), (2, False))
+        self.mine2.attributes.is_on = False
+        self.assertEqual(toggle_power(self.hub, self.allow, ids, all_rooms=True), (2, True))
+        self.assertEqual(self.mine.changed, [('power', False), ('power', True)])
+        self.assertEqual(self.mine2.changed, self.mine.changed)
+        self.assertEqual(self.housemate.changed, [])
+
     def test_middle_click_rejects_unapproved_before_writes(self):
         from core import toggle_power
         with self.assertRaises(PermissionError):
-            toggle_power(self.hub, self.allow, ['mine', 'housemate'])
+            toggle_power(self.hub, self.allow, ['mine', 'housemate'], all_rooms=True)
         self.assertEqual(self.mine.changed, [])
         self.assertEqual(self.housemate.changed, [])
 
@@ -330,13 +363,13 @@ class TrayInputTests(unittest.TestCase):
         from core import toggle_power
         self.mine2.room.id = 'new-room'
         with self.assertRaises(PermissionError):
-            toggle_power(self.hub, self.allow, ['mine', 'mine2'])
+            toggle_power(self.hub, self.allow, ['mine', 'mine2'], all_rooms=True)
         self.assertEqual(self.mine.changed, [])
 
     def test_room_power_targets_doesnt_require_currently_on(self):
         from core import tray_power_targets, light_info
         lights = [light_info(v) for v in (self.mine, self.mine2, self.housemate)]
-        self.assertEqual([x.id for x in tray_power_targets(lights, self.allow)], ['mine', 'mine2'])
+        self.assertEqual([x.id for x in tray_power_targets(lights, self.allow, 'myroom')], ['mine', 'mine2'])
 
     def test_standard_wheel_and_small_deltas(self):
         from core import wheel_steps

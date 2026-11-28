@@ -25,9 +25,9 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem, QMessageBox, QTabWidget, QScrollArea, QGroupBox, QSlider,
     QSystemTrayIcon, QMenu, QFrame, QSizePolicy, QComboBox, QToolTip, QStyleOptionSlider, QStyle,
 )
-from core import (apply, approved_climate, approved_visible, config_path, environment_snapshot, read_config, snapshot,
+from core import (ALL_APPROVED, apply, approved_climate, approved_visible, config_path, environment_snapshot, read_config, snapshot,
                   toggle_power, wheel_steps, stepped_brightness, tray_power_targets,
-                  tray_room, tray_targets, write_config)
+                  tray_targets, write_config)
 
 
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -150,11 +150,11 @@ class HubWorker(QThread):
                     # Refresh once when the wheel closes; don't read the whole
                     # hub on every intermediate pointer movement.
                 elif kind == "toggle":
-                    (ids,) = args
+                    ids, selection = args
                     with self._lock:
                         approved = dict(self._approved)
-                    count, turned_on = toggle_power(hub, approved, ids)
-                    self.completed.emit(f"{'On' if turned_on else 'Off'} · {count} approved room light(s)")
+                    count, turned_on = toggle_power(hub, approved, ids, all_rooms=selection == ALL_APPROVED)
+                    self.completed.emit(f"{'On' if turned_on else 'Off'} · {count} approved light(s)")
                     self._publish(hub)
                 elif kind == "control":
                     ids, action, value = args
@@ -828,15 +828,16 @@ class TraySettingsDialog(QDialog):
             line.setFrameShadow(QFrame.Shadow.Sunken)
             return line
 
-        layout.addWidget(heading("Tray control room"))
+        layout.addWidget(heading("Tray controls"))
         self.room = QComboBox()
-        self.room.addItem("Automatic (only if one approved room)", "")
+        self.room.setPlaceholderText("Selected room unavailable" if room_id else "Choose lights to control")
+        self.room.addItem("All approved lights", ALL_APPROVED)
         for rid, name in sorted(rooms.items(), key=lambda p: p[1].casefold()):
             self.room.addItem(name, rid)
         idx = self.room.findData(room_id)
-        self.room.setCurrentIndex(max(0, idx))
+        self.room.setCurrentIndex(idx)
         layout.addWidget(self.room)
-        layout.addWidget(description("Choose which room responds to tray brightness and power controls."))
+        layout.addWidget(description("Choose a room or all approved lights for tray controls and the dynamic icon."))
         layout.addWidget(separator())
 
         layout.addWidget(heading("Tray appearance"))
@@ -925,7 +926,7 @@ class TraySettingsDialog(QDialog):
         self._gesture_icons = []
         for row, (name, explanation, middle_click) in enumerate((
             ("Scroll", "Adjust brightness by 5% per notch for approved lights already on.", False),
-            ("Middle-click", "Toggle all approved lights in the selected room.", True),
+            ("Middle-click", "Toggle the selected approved lights together.", True),
         )):
             glyph = QLabel()
             glyph.setPixmap(mouse_control_pixmap(self.palette(), middle_click))
@@ -950,6 +951,7 @@ class TraySettingsDialog(QDialog):
         buttons.button(QDialogButtonBox.StandardButton.Save).setDefault(True)
         footer.addWidget(buttons)
         layout.addLayout(footer)
+        self.room.currentIndexChanged.connect(self.update_icon_preview)
         self.update_icon_preview()
         # Let Qt derive the minimum height from font metrics and wrapped text.
         # Never force a fixed dialog height on larger desktop fonts.
@@ -964,7 +966,7 @@ class TraySettingsDialog(QDialog):
             self.icon_status.setText("Dynamic lighting status disabled")
         else:
             if self._default_icon is not None:
-                icon = self._default_icon()
+                icon = self._default_icon(self.room.currentData())
             else:
                 icon = QIcon(str(ASSETS / panel_icon_filename()))
             self.icon_label.setText("Table Lamp (default)")
@@ -1104,8 +1106,8 @@ class MainWindow(QMainWindow):
             self.tray.show()
             self.tray_wheel.start()
 
-    def _default_panel_qicon(self):
-        active = any(l.on for l in approved_visible(self.lights, self.config["approved"]))
+    def _default_panel_qicon(self, selection):
+        active = any(light.on for light in tray_power_targets(self.lights, self.config["approved"], selection))
         filename = panel_icon_filename(active)
         if filename not in self._panel_icon_cache:
             self._panel_icon_cache[filename] = native_tray_icon(filename)
@@ -1121,7 +1123,7 @@ class MainWindow(QMainWindow):
         if not self._custom_panel_icon.isNull():
             key, icon = ("custom", path), self._custom_panel_icon
         else:
-            filename, icon = self._default_panel_qicon()
+            filename, icon = self._default_panel_qicon(self.config.get("tray_room"))
             key = ("default", filename)
         if key != self._panel_icon_name:
             self.tray.setIcon(icon)
@@ -1142,14 +1144,15 @@ class MainWindow(QMainWindow):
             self._tray_last_middle = True
             self.on_tray_middle()
 
-    def _current_tray_room(self):
-        return tray_room(self.lights, self.config["approved"], self.config.get("tray_room", ""))
+    def _tray_selection_name(self):
+        selected = self.config.get("tray_room")
+        if selected == ALL_APPROVED:
+            return "All approved lights"
+        return self._approved_rooms().get(selected, "Selected room unavailable" if selected else "No tray selection")
 
     def _tray_tooltip(self):
-        rid = self._current_tray_room()
-        visible = approved_visible(self.lights, self.config["approved"])
-        room_lights = [l for l in visible if l.room_id == rid] if rid else []
-        name = room_lights[0].room_name if room_lights else "No wheel room selected"
+        rid = self.config.get("tray_room")
+        name = self._tray_selection_name()
         sensors = approved_climate(self.sensors, self.config["approved_sensors"])
         matching = [s for s in sensors if s.room_id == rid and s.reachable] if rid else []
         if not matching:
@@ -1177,9 +1180,9 @@ class MainWindow(QMainWindow):
     def create_tray_menu(self):
         menu = QMenu(self)
         menu.addAction("Show controls", self.show_and_raise)
-        self._room_power_action = menu.addAction("Toggle approved room lights (middle-click)", self.on_tray_middle)
+        self._room_power_action = menu.addAction("Toggle selected lights (middle-click)", self.on_tray_middle)
         menu.addAction("Refresh", self.refresh)
-        self._room_menu = menu.addMenu("Scroll brightness in…")
+        self._room_menu = menu.addMenu("Tray controls for…")
         self._room_menu.triggered.connect(self.room_action_triggered)
         self._menu_rooms = None
         menu.addAction("Tray settings", self.change_tray_settings)
@@ -1192,13 +1195,13 @@ class MainWindow(QMainWindow):
         self.set_tray_room(action.data())
 
     def update_tray_menu(self):
-        selected = self.config.get("tray_room", "")
+        selected = self.config.get("tray_room")
         power = tray_power_targets(self.lights, self.config["approved"], selected)
         self._room_power_action.setEnabled(bool(power))
         rooms = self._approved_rooms()
         if rooms != self._menu_rooms:
             self._room_menu.clear()
-            choices = [("", "Automatic (one approved room)")]
+            choices = [(ALL_APPROVED, "All approved lights")]
             choices.extend(sorted(rooms.items(), key=lambda pair: pair[1].casefold()))
             for room_id, name in choices:
                 action = self._room_menu.addAction(name)
@@ -1220,15 +1223,15 @@ class MainWindow(QMainWindow):
 
     def change_tray_settings(self):
         rooms = self._approved_rooms()
-        dialog = TraySettingsDialog(self, self.config.get("tray_room", ""), rooms,
+        dialog = TraySettingsDialog(self, self.config.get("tray_room"), rooms,
                                     icon_name=self.config.get("tray_icon_path", ""),
-                                    default_icon=lambda: self._default_panel_qicon()[1])
+                                    default_icon=lambda selection: self._default_panel_qicon(selection)[1])
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.config["tray_icon_path"] = dialog.icon_name
             # Reload even if the same file was selected (it may have changed).
             self._custom_icon_path = None
             self._panel_icon_name = None
-            self.set_tray_room(dialog.room.currentData())
+            self.set_tray_room(dialog.room.currentData() or self.config.get("tray_room"))
         dialog.deleteLater()
 
     def show_about(self):
@@ -1304,12 +1307,10 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def show_tray_diagnostics(self, dialog_parent=None):
-        room = self._current_tray_room()
-        bulbs = tray_power_targets(self.lights, self.config["approved"], self.config.get("tray_room", ""))
-        eligible = tray_targets(self.lights, self.config["approved"], self.config.get("tray_room", ""))
+        bulbs = tray_power_targets(self.lights, self.config["approved"], self.config.get("tray_room"))
+        eligible = tray_targets(self.lights, self.config["approved"], self.config.get("tray_room"))
         registration = "Installed" if self.tray_wheel.installed else "Unavailable"
-        approved = approved_visible(self.lights, self.config["approved"])
-        active_count = sum(bool(light.on) for light in approved)
+        active_count = sum(bool(light.on) for light in bulbs)
         mode, variant = self._panel_icon_name or ("unknown", "")
         variant = "Custom ICO" if mode == "custom" else variant
         message = (
@@ -1317,15 +1318,15 @@ class MainWindow(QMainWindow):
             f"Icon visible by the clock: {self.tray.geometry().isValid()}\n"
             f"Tray icon mode: {mode}\n"
             f"Selected icon: {variant}\n"
-            f"Approved lights on (all rooms): {active_count}/{len(approved)}\n"
+            f"Selected lights on: {active_count}/{len(bulbs)}\n"
             f"Light status: {'Unverified / last known' if self._tray_state_stale else 'Current snapshot'}\n"
             f"Wheel hook: {registration}\n"
             f"Wheel events over the icon: {self.tray_wheel.count}\n"
             f"Last wheel delta: {self._tray_last_wheel}\n"
             f"Middle-click received: {self._tray_last_middle}\n"
             f"Wheel hook error: {self.tray_wheel.error or 'None'}\n"
-            f"Selected room: {self._approved_rooms().get(room, 'None')}\n"
-            f"Approved room bulbs: {len(bulbs)}\n"
+            f"Tray selection: {self._tray_selection_name()}\n"
+            f"Approved lights in selection: {len(bulbs)}\n"
             f"On and dimmable: {len(eligible)}\n\n"
             "If wheel input is unavailable, move the icon out of the system tray overflow "
             "and try reinstalling the wheel hook."
@@ -1351,9 +1352,9 @@ class MainWindow(QMainWindow):
             self.status.setText("Tray scroll received, but the hub is not connected")
             return
         targets = tray_targets(self.lights, self.config["approved"],
-                               self.config.get("tray_room", ""))
+                               self.config.get("tray_room"))
         if not targets:
-            self.status.setText("Tray scroll received, but no approved ON bulbs in the selected room")
+            self.status.setText("Tray scroll received, but no approved ON lights in the tray selection")
             self._tray_feedback("No approved ON bulbs available for dimming")
             return
         ids = tuple(l.id for l in targets)
@@ -1369,15 +1370,15 @@ class MainWindow(QMainWindow):
                  else stepped_brightness([l.brightness for l in targets], 0))
         self._tray_pending_level = max(1, min(100, level + steps * 5))
         self._tray_brightness_timer.start()  # debounce rapid wheel turns
-        room_name = targets[0].room_name
-        self.status.setText(f"{room_name} · target brightness {self._tray_pending_level}%")
-        self._tray_feedback(f"{room_name} lights: {self._tray_pending_level}%")
+        selection = self._tray_selection_name()
+        self.status.setText(f"{selection} · target brightness {self._tray_pending_level}%")
+        self._tray_feedback(f"{selection} · {self._tray_pending_level}%")
 
     def flush_tray_brightness(self):
         if self._tray_pending_level is None or not self._tray_pending_ids:
             return
         ids = tuple(l.id for l in tray_targets(self.lights, self.config["approved"],
-                                                self.config.get("tray_room", "")))
+                                                self.config.get("tray_room")))
         if ids != self._tray_pending_ids:
             self._tray_pending_level = None
             self._tray_pending_ids = ()
@@ -1394,18 +1395,18 @@ class MainWindow(QMainWindow):
         self._tray_pending_ids = ()
         self._tray_scroll_accumulator = 0
         self.update_tray_tooltip()
-        targets = tray_power_targets(self.lights, self.config["approved"],
-                                     self.config.get("tray_room", ""))
+        selection = self.config.get("tray_room")
+        targets = tray_power_targets(self.lights, self.config["approved"], selection)
         if not targets:
-            self.status.setText("Middle-click received; no approved room lights")
+            self.status.setText("Middle-click received; no approved lights in the tray selection")
             return
         if not all(l.reachable and l.can("power") for l in targets):
-            self.status.setText("Room toggle refused: an approved bulb is offline or lacks on/off control")
-            self._tray_feedback("Room toggle unavailable: an approved bulb is offline")
+            self.status.setText("Toggle refused: a selected light is offline or lacks on/off control")
+            self._tray_feedback("Toggle unavailable: check the selected lights")
             return
         ids = [l.id for l in targets]
-        self.worker.submit("toggle", ids)  # worker re-fetches and validates all IDs
-        self.status.setText(f"Toggle requested for {len(ids)} approved room lights")
+        self.worker.submit("toggle", ids, selection)  # Re-fetch and validate every light before writing.
+        self.status.setText(f"Toggle requested for {len(ids)} approved lights")
 
     def show_and_raise(self):
         self.showNormal()
@@ -1441,7 +1442,7 @@ class MainWindow(QMainWindow):
         self.config = {"ip": new_ip, "token": new_token,
                        "approved": dict(self.config["approved"]) if same_hub else {},
                        "approved_sensors": dict(self.config["approved_sensors"]) if same_hub else {},
-                       "tray_room": self.config.get("tray_room", "") if same_hub else "",
+                       "tray_room": self.config.get("tray_room") if same_hub else None,
                        "tray_icon_path": self.config.get("tray_icon_path", "")}
         write_config(self.config)
         self.lights = []
