@@ -53,6 +53,7 @@ class LightInfo:
     temp_high: int | None
     hue: float
     saturation: float
+    color_mode: str | None = None
 
     def can(self, action: str) -> bool:
         if action == "color":
@@ -66,6 +67,7 @@ def light_info(light: Any) -> LightInfo:
     attrs = light.attributes
     caps = tuple(getattr(light.capabilities, "can_receive", ()) or ())
     rng = temp_range(attrs)
+    color_mode = getattr(attrs, "color_mode", None)
     return LightInfo(
         id=str(light.id),
         name=str(getattr(attrs, "custom_name", "") or "Unnamed lamp"),
@@ -78,6 +80,7 @@ def light_info(light: Any) -> LightInfo:
         temperature=getattr(attrs, "color_temperature", None),
         temp_low=rng[0] if rng else None,
         temp_high=rng[1] if rng else None,
+        color_mode=color_mode if color_mode in ("color", "temperature") else None,
         hue=float(getattr(attrs, "color_hue", 0) or 0),
         saturation=float(getattr(attrs, "color_saturation", 1) if getattr(attrs, "color_saturation", None) is not None else 1),
     )

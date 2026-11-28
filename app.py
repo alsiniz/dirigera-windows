@@ -9,14 +9,15 @@ import queue
 import sys
 from pathlib import Path
 from collections import defaultdict
+from dataclasses import replace
 from threading import Lock
 from importlib.metadata import PackageNotFoundError, version as package_version
 from version import APP_NAME, VERSION, KOFI_URL
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import QByteArray, QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
-from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
+from PySide6.QtCore import QByteArray, QSize, Qt, QThread, Signal, QTimer, QPointF, QRectF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
+from PySide6.QtGui import QColor, QPainter, QPen, QRegion, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -86,6 +87,7 @@ def panel_icon_filename(active=False):
 
 class HubWorker(QThread):
     loaded = Signal(object)
+    color_preview_applied = Signal(object)
     completed = Signal(str)
     failed = Signal(str)
 
@@ -147,6 +149,7 @@ class HubWorker(QThread):
                         approved = dict(self._approved)
                     for ids, value in previews.items():
                         apply(hub, approved, list(ids), "color", value)
+                        self.color_preview_applied.emit(ids)
                     # Refresh once when the wheel closes; don't read the whole
                     # hub on every intermediate pointer movement.
                 elif kind == "toggle":
@@ -770,6 +773,87 @@ class ClickToJumpSlider(QSlider):
                 event.accept()
                 return
         super().mousePressEvent(event)
+
+
+TEMPERATURE_COLOURS = (
+    (1800, (255, 151, 63)),
+    (2700, (255, 191, 128)),
+    (4000, (255, 225, 194)),
+    (5500, (255, 244, 235)),
+    (6500, (232, 242, 255)),
+    (8500, (197, 219, 255)),
+)
+
+
+class TemperatureSlider(ClickToJumpSlider):
+    keyboardAdjusted = Signal(int)
+
+    def __init__(self, light_id=None):
+        super().__init__(Qt.Orientation.Horizontal)
+        self.light_id = light_id
+        self._rgb_mode = False
+        self._previewing = False
+        self.setAccessibleName("Colour temperature")
+        self.valueChanged.connect(self._preview_temperature)
+        self.sliderPressed.connect(self._preview_temperature)
+        self.trackClicked.connect(self._preview_temperature)
+
+    def set_rgb_mode(self, active):
+        hint = "RGB colour is active. Adjust the slider to switch to white temperature." if active else ""
+        self._rgb_mode = active
+        self.setToolTip(hint)
+        self.setAccessibleDescription(hint)
+        self.clear_preview()
+
+    def clear_preview(self):
+        self._previewing = self.isSliderDown()
+        self.update()
+
+    def _preview_temperature(self):
+        self._previewing = True
+        self.update()
+
+    def keyPressEvent(self, event):
+        previous = self.value()
+        super().keyPressEvent(event)
+        if self.value() != previous:
+            self.keyboardAdjusted.emit(self.value())
+
+    def _track_colour(self):
+        if self._rgb_mode and not self._previewing:
+            return self.palette().mid().color()
+        kelvin = max(TEMPERATURE_COLOURS[0][0], self.value())
+        for (low, warm), (high, cool) in zip(TEMPERATURE_COLOURS, TEMPERATURE_COLOURS[1:]):
+            if kelvin <= high:
+                fraction = (kelvin - low) / (high - low)
+                return QColor(*(round(a + fraction * (b - a)) for a, b in zip(warm, cool)))
+        return QColor(*TEMPERATURE_COLOURS[-1][1])
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self.isEnabled():
+            return
+
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        control = QStyle.ComplexControl.CC_Slider
+        groove = self.style().subControlRect(control, option, QStyle.SubControl.SC_SliderGroove, self)
+        handle = self.style().subControlRect(control, option, QStyle.SubControl.SC_SliderHandle, self)
+        if not groove.isValid() or not handle.isValid():
+            return
+
+        # Preserve the theme's handle and focus indicator. The stripe uses the
+        # native groove position, including on styles that ignore slider palettes.
+        thickness = max(3, handle.height() / 3)
+        stripe = QRectF(groove.x() + 1, groove.center().y() - thickness / 2,
+                        groove.width() - 2, thickness)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setClipRegion(QRegion(self.rect()).subtracted(QRegion(handle)))
+        painter.setPen(self.palette().windowText().color())
+        painter.setBrush(self._track_colour())
+        painter.drawRoundedRect(stripe, thickness / 2, thickness / 2)
+        painter.end()
 
 
 def mouse_control_pixmap(palette, middle_click=False):
@@ -1459,6 +1543,7 @@ class MainWindow(QMainWindow):
     def start_worker(self):
         self.worker = HubWorker(self.config["ip"], self.config["token"], self.config["approved"])
         self.worker.loaded.connect(self.on_loaded)
+        self.worker.color_preview_applied.connect(self.on_color_preview_applied)
         self.worker.completed.connect(self.on_completed)
         self.worker.failed.connect(self.on_failed)
         self.worker.start()
@@ -1494,10 +1579,24 @@ class MainWindow(QMainWindow):
                             (f" · {moved_or_missing} unavailable/relocated light(s)" if moved_or_missing else "") +
                             (f" · {self.sensor_warning}" if self.sensor_warning else ""))
 
+    def on_color_preview_applied(self, ids):
+        if self.sender() is not self.worker:
+            return
+        ids = set(ids)
+        changed = {light.id for light in self.lights if light.id in ids and light.color_mode != "color"}
+        if changed:
+            self.lights = [replace(light, color_mode="color") if light.id in changed else light
+                           for light in self.lights]
+            for slider in self.tabs.findChildren(TemperatureSlider):
+                if slider.light_id in changed:
+                    slider.set_rgb_mode(True)
+
     def on_completed(self, message):
         self.status.setText(message)
 
     def on_failed(self, error):
+        for slider in self.tabs.findChildren(TemperatureSlider):
+            slider.clear_preview()
         # A failed request is not evidence that the lights are off.
         self._tray_state_stale = True
         self.update_tray_tooltip()
@@ -1607,12 +1706,19 @@ class MainWindow(QMainWindow):
                     supported = False
                 line = QHBoxLayout()
                 line.addWidget(QLabel("Brightness" if action == "brightness" else "Warm  ⇄  Cool"))
-                slider = ClickToJumpSlider(Qt.Orientation.Horizontal)
+                if action == "temperature":
+                    slider = TemperatureSlider(None if is_group else lights[0].id)
+                    slider.keyboardAdjusted.connect(lambda value, ids=tuple(ids), a=action:
+                                                    self.queue_slider_wheel(ids, a, value))
+                else:
+                    slider = ClickToJumpSlider(Qt.Orientation.Horizontal)
                 slider.setMinimum(bounds[0] if bounds[0] < bounds[1] else 1)
                 slider.setMaximum(bounds[1] if bounds[0] < bounds[1] else 1)
                 start = lights[0].brightness if action == "brightness" else (lights[0].temperature or bounds[0])
                 slider.setValue(max(slider.minimum(), min(slider.maximum(), start)))
                 slider.setEnabled(supported)
+                if action == "temperature":
+                    slider.set_rgb_mode(not is_group and lights[0].color_mode == "color")
                 label = QLabel()
                 label.setMinimumWidth(68)
                 label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
