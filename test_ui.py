@@ -15,7 +15,7 @@ try:
     from PySide6.QtCore import QObject, Qt, QPoint, QPointF, QCoreApplication, QEvent, QTimer, QProcess
     from PySide6.QtTest import QTest
     from PySide6.QtGui import QWheelEvent, QIcon
-    from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox, QLineEdit
+    from PySide6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QMenu, QScrollArea, QDialog, QDialogButtonBox, QLineEdit
     from shiboken6 import isValid
     from app import custom_tray_qicon, native_tray_icon, panel_icon_filename, ClickToJumpSlider, TraySettingsDialog, ConnectionDialog, TokenPairingDialog, hub_action_svg, MainWindow
     from core import ALL_APPROVED, EnvironmentInfo, LightInfo
@@ -266,6 +266,26 @@ class TraySettingsTests(unittest.TestCase):
                             self.assertGreaterEqual(notice_top - top - button.height(), 12)
                 dialog.close()
 
+    def test_long_room_name_does_not_widen_tray_settings(self):
+        parent = QWidget()
+        self.addCleanup(parent.deleteLater)
+        font = parent.font()
+        font.setPointSize(18)
+        parent.setFont(font)
+        full_name = "A long room name with a floor and wing description " * 8
+        dialog = TraySettingsDialog(parent, "r", {"r": full_name})
+        self.addCleanup(dialog.deleteLater)
+        dialog.resize(400, 330)
+        dialog.show()
+        self.app.processEvents()
+        self.assertEqual(dialog.room.currentData(), "r")
+        self.assertEqual(dialog.room.toolTip(), full_name)
+        self.assertLessEqual(dialog.width(), 400)
+        scroll = dialog.findChild(QScrollArea)
+        self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+        self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
+        dialog.reject()
+
     def test_diagnostics_accessible_from_tray_settings_without_closing(self):
         class FakeMain(QWidget):
             def __init__(self):
@@ -354,11 +374,40 @@ class ConnectionDialogTests(unittest.TestCase):
         self.assertFalse(dialog._output)
         self.assertFalse(dialog._start_timer.isActive())
 
-    def test_dialog_has_minimum_size_for_dhcp_note(self):
-        dialog = ConnectionDialog(None, {})
-        self.assertGreaterEqual(dialog.minimumHeight(), 335)
-        self.assertGreaterEqual(dialog.minimumWidth(), 620)
-        dialog.close()
+    def test_narrow_hub_and_pairing_dialogs_keep_wrapped_text_readable(self):
+        parent = QWidget()
+        self.addCleanup(parent.deleteLater)
+        font = parent.font()
+        font.setPointSize(18)
+        parent.setFont(font)
+        connection = ConnectionDialog(parent, {"ip": "192.168.1.20", "token": "test-token"})
+        pairing = TokenPairingDialog(parent, "192.168.1.20")
+        pairing._start_timer.stop()
+        pairing._set_status("The pairing request timed out",
+                            "Check the hub address and make sure the hub is on the same network.", failed=True)
+
+        for dialog in (connection, pairing):
+            with self.subTest(dialog=dialog.windowTitle()):
+                self.addCleanup(dialog.deleteLater)
+                dialog.resize(425, 330)
+                dialog.show()
+                self.app.processEvents()
+                self.assertLessEqual(dialog.width(), 425)
+                self.assertLessEqual(dialog.height(), 330)
+                scroll = dialog.findChild(QScrollArea)
+                self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
+                self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+                for label in scroll.widget().findChildren(QLabel):
+                    if label.wordWrap():
+                        self.assertGreaterEqual(label.height(), label.heightForWidth(label.width()), label.text())
+                if dialog is connection:
+                    scroll.ensureWidgetVisible(connection.ip_note)
+                    self.assertGreater(scroll.verticalScrollBar().value(), 0)
+                    buttons = connection.findChild(QDialogButtonBox)
+                    self.assertGreater(buttons.mapTo(dialog, QPoint()).y(), scroll.height())
+                    self.assertTrue(buttons.button(QDialogButtonBox.StandardButton.Save).isVisible())
+                dialog.reject()
+
 
 
 

@@ -73,7 +73,7 @@ tray chevron, drag it out to the area by the clock. Choose a room or **All appro
 in **Tray settings**. The **Tray appearance** section previews the selected icon.
 Choose **Choose icon file…** to open the native Windows file picker and select
 a valid `.ico` file. Custom icons stay static instead of reflecting lighting
-power; **Restore default dynamic icon** restores the live lamp. Save applies
+power; **Restore default icon** restores the live lamp. Save applies
 the selection; Cancel leaves it unchanged. Lysnav remembers the selected file
 path between launches, so keep the file in a permanent location. If it is
 unavailable when Lysnav starts or the settings are saved, the default lamp is
@@ -171,4 +171,4 @@ The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma
 
 In **Hub settings**, the token is masked by default. **Show** reveals it, **Hide** masks it again, and **Copy** copies it without revealing it. Keep the token and clipboard contents private. **Generate token…** starts the local pairing helper; press the action button on the underside of DIRIGERA (not the reset pinhole), then click Continue. A newly received token remains masked and is only persisted on Save. Assign a static local IP through a DHCP reservation on your router for reliable reconnection.
 
-If the notification-area icon does not change, check that **Restore default dynamic icon** is selected and inspect **Tray settings → Input diagnostics** for the selected icon variant and count of approved lights on. The pinned taskbar application icon is intentionally static.
+If the notification-area icon does not change, check that **Restore default icon** is selected and inspect **Tray settings → Input diagnostics** for the selected icon variant and count of approved lights on. The pinned taskbar application icon is intentionally static.
