@@ -16,10 +16,11 @@ from version import APP_NAME, VERSION, KOFI_URL
 from windows_tray import TrayWheelHook
 from pairing import valid_hub_address, extract_generated_token, run_token_helper
 
-from PySide6.QtCore import QByteArray, QSize, Qt, QThread, Signal, QTimer, QPointF, QRectF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
-from PySide6.QtGui import QColor, QPainter, QPen, QRegion, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
+from PySide6.QtCore import QByteArray, QSize, Qt, QThread, Signal, QTimer, QPointF, QUrl, QProcess, QProcessEnvironment, QLockFile, QEvent
+from PySide6.QtGui import QColor, QPainter, QPen, QIcon, QImage, QImageReader, QPixmap, QCursor, QKeySequence, QShortcut, QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtGui import QRegion
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, QFileDialog, QLayout,
     QLabel, QPushButton, QLineEdit, QDialog, QDialogButtonBox, QTreeWidget,
@@ -844,9 +845,10 @@ class TemperatureSlider(ClickToJumpSlider):
 
         # Preserve the theme's handle and focus indicator. The stripe uses the
         # native groove position, including on styles that ignore slider palettes.
-        thickness = max(3, handle.height() / 3)
-        stripe = QRectF(groove.x() + 1, groove.center().y() - thickness / 2,
-                        groove.width() - 2, thickness)
+        thickness = max(3, handle.height() // 3)
+        stripe = groove.adjusted(1, 0, -1, 0)
+        stripe.setHeight(thickness)
+        stripe.moveCenter(groove.center())
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setClipRegion(QRegion(self.rect()).subtracted(QRegion(handle)))
