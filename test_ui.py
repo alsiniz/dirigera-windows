@@ -408,6 +408,21 @@ class ConnectionDialogTests(unittest.TestCase):
                     self.assertTrue(buttons.button(QDialogButtonBox.StandardButton.Save).isVisible())
                 dialog.reject()
 
+    def test_pairing_instructions_stay_together_beside_illustration(self):
+        dialog = TokenPairingDialog(None, "192.168.1.20")
+        self.addCleanup(dialog.deleteLater)
+        dialog._start_timer.stop()
+        dialog.resize(680, 490)
+        dialog.show()
+        self.app.processEvents()
+        first, second = [label for label in dialog.findChildren(QLabel)
+                         if label.text().startswith(("<b>1.", "<b>2."))]
+        first_bottom = first.mapTo(dialog, QPoint(0, first.height())).y()
+        second_top = second.mapTo(dialog, QPoint()).y()
+        self.assertGreaterEqual(second_top, first_bottom)
+        self.assertLessEqual(second_top - first_bottom, first.fontMetrics().lineSpacing())
+        dialog.reject()
+
 
 
 

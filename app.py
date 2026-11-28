@@ -505,9 +505,11 @@ class TokenPairingDialog(QDialog):
         steps = QWidget()
         steps_layout = QVBoxLayout(steps)
         steps_layout.setContentsMargins(0, 0, 0, 0)
+        steps_layout.addStretch(1)
         for text in ("<b>1. Press the action button</b> on the underside of your DIRIGERA hub.",
                      "<b>2. Click Continue</b> below to complete pairing."):
             steps_layout.addWidget(wrapped_label(text, rich=True))
+        steps_layout.addStretch(1)
         layout.addLayout(wrapping_pair(self.hub_illustration, steps))
         layout.addWidget(wrapped_label("Your access token is stored locally when you save your hub settings. Keep it private."))
         layout.addStretch()
