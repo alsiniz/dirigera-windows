@@ -23,7 +23,7 @@ based on upstream commit [`a334176`](https://github.com/alsiniz/lysnav-plasma/co
 - **Local control.** Use your existing hub over the LAN without a cloud login
   or a separate automation server.
 - **Quick tray controls.** Scroll over the lamp icon to dim or brighten.
-  Middle-click to toggle the approved lights in your selected room.
+  Middle-click to toggle your selected approved lights.
 - **In-app pairing.** Generate the hub access token from **Hub settings**.
 - **Shared households.** Choose exactly which lights the app can control and
   which climate sensors it can read.
@@ -42,12 +42,12 @@ hub continues to manage its devices.
 
 ## Install
 
-Download the **pre-rebrand v1.0.0-rc.2** from [GitHub Releases](https://github.com/alsiniz/lysnav-windows/releases/tag/v1.0.0-rc.2).
+Download the **v1.0.0-rc.3** from [GitHub Releases](https://github.com/alsiniz/lysnav-windows/releases/tag/v1.0.0-rc.3).
 
 | Download | How to use it |
 | --- | --- |
-| **Installer** · `DIRIGERA-Windows-1.0.0-rc.2-x64-Setup.exe` | Installs for your Windows account, adds a **DIRIGERA for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start DIRIGERA when I sign in** during setup to enable startup. |
-| **Portable** · `DIRIGERA-Windows-1.0.0-rc.2-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
+| **Installer** · `Lysnav-Windows-1.0.0-rc.3-x64-Setup.exe` | Installs for your Windows account, adds a **Lysnav for Windows** Start menu shortcut, and can be removed from **Settings → Apps**. Select **Start Lysnav when I sign in** during setup to enable startup. |
+| **Portable** · `Lysnav-Windows-1.0.0-rc.3-x64-Portable.exe` | Run the executable directly. It extracts its bundled libraries to a temporary folder at launch. |
 
 > **Windows publisher verification.** This release candidate is unsigned.
 > Microsoft SmartScreen can show an unverified-publisher warning, and Smart App
@@ -69,16 +69,25 @@ A DHCP reservation in your router helps the hub keep the same IP address.
 ## Control from the Windows tray
 
 Look for the **lamp icon** by the clock. If Windows puts it behind the
-tray chevron, drag it out to the area by the clock. Choose the controlled room
-in **Tray settings**.
+tray chevron, drag it out to the area by the clock. Choose a room or **All approved lights**
+in **Tray settings**. The **Tray appearance** section previews the selected icon.
+Choose **Choose icon file…** to open the native Windows file picker and select
+a valid `.ico` file. Custom icons stay static instead of reflecting lighting
+power; **Restore default dynamic icon** restores the live lamp. Save applies
+the selection; Cancel leaves it unchanged. Lysnav remembers the selected file
+path between launches, so keep the file in a permanent location. If it is
+unavailable when Lysnav starts or the settings are saved, the default lamp is
+used. The full-colour application and taskbar button icons are unaffected.
 
 | Interaction | What happens |
 | --- | --- |
 | **Hover** | See temperature and humidity from approved climate sensors. |
-| **Scroll up or down** | Change brightness in 5% steps for approved lights that are already on. |
-| **Middle-click** | Toggle approved lights in the selected room together. |
+| **Scroll up or down** | Change brightness in 5% steps for selected approved lights that are already on. |
+| **Middle-click** | Toggle the selected approved lights together. |
 | **Left-click** | Open the full controls window. |
 | **Right-click** | Open the tray menu for quick actions, settings, and Quit. |
+
+Existing room choices are kept on upgrade. If you previously used Automatic with approvals in more than one room, choose a tray selection.
 
 A brief overlay shows the target brightness as you scroll. Closing the window
 keeps the app in the tray. Select **Quit** from the tray menu or press **Ctrl+Q**
@@ -152,8 +161,14 @@ See [CHANGELOG.md](CHANGELOG.md) for the changes in each release candidate.
 This independent community project is licensed under [MIT](LICENSE).
 See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components.
 
-The running app uses a monochrome lamp in the taskbar and notification area. It follows the Windows system colour mode, including when your apps use a different mode.
+The notification-area lamp follows the Windows system colour mode, including when apps use a different mode. Its shade turns orange when any approved light in the tray selection is on and stays monochrome when all are off. The application window, taskbar button, shortcuts and executables use the full-colour Lysnav logo.
 
 ## Lysnav editions
 
 The desktop repositories are `alsiniz/lysnav-windows` and `alsiniz/lysnav-plasma`. The planned mobile edition is Lysnav for Android (`alsiniz/lysnav-android`). [View the logo and panel icons](docs/branding/README.md).
+
+### Hub credentials and pairing
+
+In **Hub settings**, the token is masked by default. **Show** reveals it, **Hide** masks it again, and **Copy** copies it without revealing it. Keep the token and clipboard contents private. **Generate token…** starts the local pairing helper; press the action button on the underside of DIRIGERA (not the reset pinhole), then click Continue. A newly received token remains masked and is only persisted on Save. Assign a static local IP through a DHCP reservation on your router for reliable reconnection.
+
+If the notification-area icon does not change, check that **Restore default dynamic icon** is selected and inspect **Tray settings → Input diagnostics** for the selected icon variant and count of approved lights on. The pinned taskbar application icon is intentionally static.

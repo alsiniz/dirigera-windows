@@ -4,7 +4,7 @@
 
 The [Table Lamp logo](../../assets/lysnav-logo.svg) has a `#282828` rounded square, a `#fe8019` shade and a `#ebdbb2` stem and base. Use it for the app identity and About view.
 
-For system panels, use the transparent [light-mode icon](../../assets/tray-light.svg) with a dark lamp or the [dark-mode icon](../../assets/tray-dark.svg) with a light lamp. The tighter crop keeps the silhouette legible at small sizes.
+Only the notification-area icon changes with lighting status: [light off](../../assets/tray-light.svg), [light on](../../assets/tray-light-on.svg), [dark off](../../assets/tray-dark.svg), [dark on](../../assets/tray-dark-on.svg). The shade is `#FE8019` when any approved lamp is on; the base and off-state shade are `#282828` on light panels and `#EBDBB2` on dark panels. All other application icons use the full-colour logo.
 
 [View the Daylight social preview](social/README.md).
 
