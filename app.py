@@ -1456,13 +1456,14 @@ class MainWindow(QMainWindow):
         self.start_worker()
 
     def start_worker(self):
-        self.refresh_timer.stop()
         self.worker = HubWorker(self.config["ip"], self.config["token"], self.config["approved"])
         self.worker.loaded.connect(self.on_loaded)
         self.worker.completed.connect(self.on_completed)
         self.worker.failed.connect(self.on_failed)
         self.worker.start()
         self.status.setText(f"Connecting to {self.config['ip']}…")
+        # Schedule another read even if the initial request fails.
+        self.refresh_timer.start()
         self.refresh()
 
     def refresh(self):

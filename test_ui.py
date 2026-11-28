@@ -371,10 +371,10 @@ class RefreshLifetimeTests(unittest.TestCase):
     def setUp(self):
         config = dict(ip='test', token='test', approved={'lamp': 'room'}, approved_sensors={'sensor': 'room'})
         self.enterContext(patch('app.read_config', return_value=config))
-        self.enterContext(patch.object(MainWindow, 'start_worker'))
         self.enterContext(patch('app.TrayWheelHook.start'))
         self.enterContext(patch('app.QSystemTrayIcon.show'))
-        self.window = MainWindow()
+        with patch.object(MainWindow, 'start_worker'):
+            self.window = MainWindow()
         self.addCleanup(self.flush_deletions)
         self.addCleanup(self.window.deleteLater)
         self.light = LightInfo('lamp', 'Desk', 'room', 'Study', True, ('isOn', 'lightLevel'),
@@ -383,6 +383,34 @@ class RefreshLifetimeTests(unittest.TestCase):
 
     def flush_deletions(self):
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_failed_first_hub_read_retries_and_updates_tray_icon(self):
+        window = self.window
+        self.enterContext(patch("dirigera.Hub"))
+        snapshot = self.enterContext(patch("app.snapshot", side_effect=TimeoutError("Hub unreachable")))
+        self.enterContext(patch("app.environment_snapshot", return_value=[]))
+        window.start_worker()
+        self.addCleanup(window.worker.wait)
+        self.addCleanup(window.worker.stop)
+        self.addCleanup(window.refresh_timer.stop)
+
+        for _ in range(200):
+            if window.status.text().startswith("Request failed"):
+                break
+            QTest.qWait(10)
+        self.assertIn("Hub unreachable", window.status.text())
+        self.assertTrue(window.refresh_timer.isActive())
+
+        snapshot.side_effect = None
+        snapshot.return_value = [self.light]
+        window.refresh_timer.setInterval(25)
+        for _ in range(200):
+            if not window._tray_state_stale:
+                break
+            QTest.qWait(10)
+        self.assertFalse(window._tray_state_stale)
+        image = window.tray.icon().pixmap(64, 64).toImage()
+        self.assertEqual(image.pixelColor(32, 25).name(), "#fe8019")
 
     def test_tray_status_is_global_approved_and_does_not_replace_app_logo(self):
         window = self.window
